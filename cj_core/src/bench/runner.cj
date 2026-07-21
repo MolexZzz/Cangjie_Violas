@@ -27,7 +27,7 @@ public func allDatasetSpecs(): Array<DatasetSpec> {
     list.add(DatasetSpec("3", "Yahoo Answers", base + "yahoo_precomputed.txt", "text", true))
     list.add(DatasetSpec("4", "Caltech-101", base + "caltech_precomputed.txt", "image", false))
     list.add(DatasetSpec("5", "CUB-200", base + "cub_precomputed.txt", "image", false))
-    list.add(DatasetSpec("6", "COCO-10k", base + "coco_precomputed.txt", "image", false))
+    list.add(DatasetSpec("6", "COCO (scope由manifest确认)", base + "coco_precomputed.txt", "image", false))
     return list.toArray()
 }
 
@@ -129,4 +129,28 @@ public func interactiveBenchMain(): Unit {
         runFullBenchmark(s.txtPath, s.label, dsScale)
     }
     println("\nAll benchmarks finished.")
+}
+
+// 单行可自动化入口，例如：echo "bench smoke 1" | cjpm run
+public func runBenchPreset(scaleName: String, selection: String): Unit {
+    let specs = parseSelection(selection)
+    if (scaleName != "smoke" && scaleName != "partial" && scaleName != "full") {
+        throw IllegalArgumentException("未知评测规模: ${scaleName}，可选 smoke/partial/full")
+    }
+    for (s in specs) {
+        let scale = if (scaleName == "smoke") { EvalScale.smoke(s.vectorType) }
+                    else if (scaleName == "full") { EvalScale.full(s.vectorType) }
+                    else { EvalScale.partial(s.vectorType) }
+        println("\n" + "#" * 72)
+        println(">>> 数据集: ${s.label}; scale=${scaleName}")
+        println("#" * 72)
+        runFullBenchmark(s.txtPath, s.label, scale)
+    }
+}
+
+public func runParityPreset(selection: String, maxQueries: Int64, beta: Float64): Unit {
+    let specOpt = findSpec(selection)
+    if (specOpt.isNone()) { throw IllegalArgumentException("parity 仅支持单个数据集编号 1..6") }
+    let spec = specOpt.getOrThrow()
+    runParityTrace(spec.txtPath, selection, spec.vectorType, maxQueries, beta)
 }

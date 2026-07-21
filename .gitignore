@@ -6,6 +6,8 @@
 # Datasets and generated benchmark artifacts
 /dataset/*
 !/dataset/.gitkeep
+/artifacts/
+/results/
 **/data/
 **/datasets/
 **/cache/

@@ -5,7 +5,6 @@ import std.time.*
 import std.random.*
 import std.convert.* 
 import std.sort.* 
-import std.math.*
 
 // ============= 检索结果实体 =============
 
@@ -25,6 +24,14 @@ public class SearchResult <: Comparable<SearchResult> & ToString {
     public func compare(other: SearchResult): Ordering {
         if (this.distance < other.distance) { return Ordering.LT }
         if (this.distance > other.distance) { return Ordering.GT }
+        let keyOrder = this.key.compare(other.key)
+        if (keyOrder != Ordering.EQ) { return keyOrder }
+        let groupOrder = this.group.groupName.compare(other.group.groupName)
+        if (groupOrder != Ordering.EQ) { return groupOrder }
+        let thisIdx = match (this.vectorIdx) { case Some(i) => i; case None => -1 }
+        let otherIdx = match (other.vectorIdx) { case Some(i) => i; case None => -1 }
+        if (thisIdx < otherIdx) { return Ordering.LT }
+        if (thisIdx > otherIdx) { return Ordering.GT }
         return Ordering.EQ
     }
 
@@ -47,22 +54,6 @@ public class VectorMapEntry {
     }
 }
 
-private class HdmgScore <: Comparable<HdmgScore> {
-    public let score: Float64
-    public let nodeId: Int64
-
-    public init(score: Float64, nodeId: Int64) {
-        this.score = score
-        this.nodeId = nodeId
-    }
-
-    public func compare(other: HdmgScore): Ordering {
-        if (this.score < other.score) { return Ordering.LT }
-        if (this.score > other.score) { return Ordering.GT }
-        return Ordering.EQ
-    }
-}
-
 private func _nowNs(): Int64 {
     return DateTime.now().toUnixTimeStamp().toNanoseconds()
 }
@@ -82,6 +73,10 @@ public class VectorMap <: ToString {
     private var hdmgSemanticEdges: ArrayList<ArrayList<Int64>>
     private var hdmgKeyEntries: HashMap<String, Int64>
     private var hdmgGlobalEntry: Option<Int64>
+    private var dataVersion: Int64
+    private var repIndexBuiltFromVersion: Int64
+    private var singleIndexBuiltFromVersion: Int64
+    private var hdmgBuiltFromVersion: Int64
 
     public init() {
         this.data = HashMap<String, VectorMapEntry>()
@@ -96,11 +91,24 @@ public class VectorMap <: ToString {
         this.hdmgSemanticEdges = ArrayList<ArrayList<Int64>>()
         this.hdmgKeyEntries = HashMap<String, Int64>()
         this.hdmgGlobalEntry = None
+        this.dataVersion = 0
+        this.repIndexBuiltFromVersion = -1
+        this.singleIndexBuiltFromVersion = -1
+        this.hdmgBuiltFromVersion = -1
+    }
+
+    private func _invalidateIndexes(): Unit {
+        this.dataVersion++
+        this.hdmgBuilt = false
+        this.hdmgBuiltFromVersion = -1
+        this.repIndexBuiltFromVersion = -1
+        this.singleIndexBuiltFromVersion = -1
     }
 
     private func _getKeysAsArray(): Array<String> {
         let keysList = ArrayList<String>() // 使用 let 保证闭包捕获安全
         for ((k, _) in this.data) { keysList.add(k) }
+        sort(keysList, by: { a, b => a.compare(b) })
         return Array<String>(keysList.size, { i => keysList[i] })
     }
 
@@ -155,21 +163,7 @@ public class VectorMap <: ToString {
             entry.groups = newGroups
         }
         entry.groups.add(vectorGroup)
-        this.hdmgBuilt = false
-    }
-
-    private func _baseKey(key: String): String {
-        let idxOpt = key.lastIndexOf("-")
-        if (idxOpt.isNone()) { return key }
-        let idx = idxOpt.getOrThrow()
-        if (idx <= 0 || idx >= key.size - 1) { return key }
-        let suffix = key[(idx + 1)..key.size]
-        try {
-            let _ = Int64.parse(suffix)
-            return key[0..idx]
-        } catch (e: Exception) {
-            return key
-        }
+        _invalidateIndexes()
     }
 
     private func _meanVector(vectors: Array<Array<Float64>>): Array<Float64> {
@@ -177,6 +171,9 @@ public class VectorMap <: ToString {
         let dim = vectors[0].size
         let out = Array<Float64>(dim, repeat: 0.0)
         for (vec in vectors) {
+            if (vec.size != dim) {
+                throw IllegalArgumentException("组内向量维度不一致: ${vec.size} != ${dim}")
+            }
             for (i in 0..dim) { out[i] += vec[i] }
         }
         let denom = Float64(vectors.size)
@@ -187,15 +184,8 @@ public class VectorMap <: ToString {
     private func _distanceFunc(distanceMethod: String): (Array<Float64>, Array<Float64>) -> Float64 {
         if (distanceMethod == "euclidean") { return euclideanDistance }
         if (distanceMethod == "manhattan") { return manhattanDistance }
-        return cosineDistance
-    }
-
-    private func _clusterSuffix(n: Int64): String {
-        let s = n.toString()
-        if (s.size >= 4) { return s }
-        var out = s
-        for (_ in 0..(4 - s.size)) { out = "0" + out }
-        return out
+        if (distanceMethod == "cosine") { return cosineDistance }
+        throw IllegalArgumentException("不支持的距离方法: ${distanceMethod}")
     }
 
     private func _expandedSearchKeys(keyOpt: Option<String>): Array<String> {
@@ -213,12 +203,23 @@ public class VectorMap <: ToString {
     }
 
     public func setKeyVectors(keyVectors: HashMap<String, Array<Float64>>): Unit {
+        var expectedDim: Int64 = -1
+        for ((key, vector) in keyVectors) {
+            if (vector.isEmpty()) { throw IllegalArgumentException("key vector 不能为空: ${key}") }
+            if (expectedDim < 0) { expectedDim = vector.size }
+            if (vector.size != expectedDim) {
+                throw IllegalArgumentException("key vector 维度不一致: key=${key}, ${vector.size} != ${expectedDim}")
+            }
+        }
         this.keyVectors = keyVectors
-        this.hdmgBuilt = false
+        _invalidateIndexes()
     }
 
+    // 当调用方通过公开的 data/groups/vectors 容器直接修改内容时，必须显式标记索引失效。
+    public func markDirty(): Unit { _invalidateIndexes() }
+
     public func getKeyVector(key: String): Option<Array<Float64>> {
-        let base = _baseKey(key)
+        let base = storageBaseKey(key)
         if (this.keyVectors.contains(base)) { return Some(this.keyVectors[base]) }
         if (this.keyVectors.contains(key)) { return Some(this.keyVectors[key]) }
         return None
@@ -233,38 +234,30 @@ public class VectorMap <: ToString {
         let n = vectorGroup.vectors.size
         if (n == 0) { return 0 }
 
-        let a = if (alpha < 0.0) { 0.0 } else if (alpha > 1.0) { 1.0 } else { alpha }
-        var nClusters: Int64 = 1
-        if (a <= 0.05) {
-            nClusters = n
-        } else if (a >= 0.95) {
-            nClusters = 1
-        } else {
-            nClusters = Int64(sqrt(Float64(n)) + 0.5)
-            if (nClusters < 1) { nClusters = 1 }
-            if (nClusters > n) { nClusters = n }
-        }
+        let nClusters = clusterCount(n, alpha)
 
         if (nClusters == 1 || n < 5) {
             insert("${key}-0001", vectorGroup, metadataOpt: metadataOpt)
             return 1
         }
 
+        let labels = sklearnCompatibleKMeans(vectorGroup.vectors, nClusters)
         var created: Int64 = 0
-        var start: Int64 = 0
-        while (start < n) {
-            let remaining = n - start
-            let remainingClusters = nClusters - created
-            var chunk = remaining / remainingClusters
-            if (remaining % remainingClusters != 0) { chunk++ }
-            let end = if (start + chunk > n) { n } else { start + chunk }
-            let size = end - start
-            let startIdx = start
-            let vecArr = Array<Array<Float64>>(size, { i => vectorGroup.vectors[startIdx + i] })
-            let descArr = Array<Any>(size, { i => vectorGroup.descriptions[startIdx + i] })
+        for (clusterId in 0..nClusters) {
+            let clusterVectors = ArrayList<Array<Float64>>()
+            let clusterDescriptions = ArrayList<Any>()
+            for (i in 0..n) {
+                if (labels[i] == clusterId) {
+                    clusterVectors.add(vectorGroup.vectors[i])
+                    clusterDescriptions.add(vectorGroup.descriptions[i])
+                }
+            }
+            if (clusterVectors.isEmpty()) { continue }
+            let vecArr = clusterVectors.toArray()
+            let descArr = clusterDescriptions.toArray()
             let rep = _meanVector(vecArr)
             let subGroup = VectorGroup(
-                "${vectorGroup.groupName}_cluster_${created + 1}",
+                "${vectorGroup.groupName}_cluster_${clusterSuffix(created + 1)}",
                 rep,
                 "cluster_mean_${created + 1}",
                 vecArr,
@@ -272,17 +265,29 @@ public class VectorMap <: ToString {
                 vectorType: vectorGroup.vectorType,
                 groupType: vectorGroup.groupType
             )
-            let subKey = "${key}-${_clusterSuffix(created + 1)}"
+            let subKey = "${key}-${clusterSuffix(created + 1)}"
             insert(subKey, subGroup, metadataOpt: metadataOpt)
             created++
-            start = end
         }
         return created
     }
 
     public func buildIndex(): Unit { buildRepIndex(); buildSingleIndex() }
-    public func buildRepIndex(): Unit { /* 仓颉版当前使用精确遍历；保留 API 对齐 Python。 */ }
-    public func buildSingleIndex(): Unit { /* 仓颉版当前使用精确遍历；保留 API 对齐 Python。 */ }
+    // 当前仓颉实现仍使用精确遍历，但显式记录快照版本，避免空接口静默无状态。
+    public func buildRepIndex(): Unit { this.repIndexBuiltFromVersion = this.dataVersion }
+    public func buildSingleIndex(): Unit { this.singleIndexBuiltFromVersion = this.dataVersion }
+
+    public func getIndexState(): HashMap<String, Any> {
+        let state = HashMap<String, Any>()
+        state["data_version"] = this.dataVersion
+        // 当前两个传统索引接口只记录快照版本，查询实现仍是精确遍历；显式暴露语义避免误称 ANN。
+        state["rep_index_mode"] = "exact_scan_snapshot"
+        state["single_index_mode"] = "exact_scan_snapshot"
+        state["rep_index_current"] = this.repIndexBuiltFromVersion == this.dataVersion
+        state["single_index_current"] = this.singleIndexBuiltFromVersion == this.dataVersion
+        state["hdmg_current"] = this.hdmgBuilt && this.hdmgBuiltFromVersion == this.dataVersion
+        return state
+    }
 
     // 向已有的特定组中追加一个向量
     public func addVector(vector: Array<Float64>, description: HashMap<String, Any>): Int64 {
@@ -296,12 +301,17 @@ public class VectorMap <: ToString {
                 println("warning: vector_map 没有找到 key '${keyOpt.getOrThrow()}' 和 group_name '${groupNameOpt.getOrThrow()}'")
                 return -1
             case Some(group) => 
-                return group.append(vector, description)
+                let inserted = group.append(vector, description)
+                if (inserted >= 0) { _invalidateIndexes() }
+                return inserted
         }
     }
 
     // 批量插入向量
     public func addVectorList(vectorList: Array<Array<Float64>>, descriptionList: Array<HashMap<String, Any>>): Int64 {
+        if (vectorList.size != descriptionList.size) {
+            throw IllegalArgumentException("向量数量与描述数量不一致: ${vectorList.size} != ${descriptionList.size}")
+        }
         let globalId = "uuid_${DateTime.now().toUnixTimeStamp()}_${Random().nextInt64()}"
         var idx = 0
 
@@ -493,12 +503,13 @@ public class VectorMap <: ToString {
         mode!: String = "single", distanceMethod!: String = "cosine",
         keyOpt!: Option<String> = None, vectorType!: Option<String> = None, groupType!: Option<String> = None
     ): Array<SearchResult> {
+        if (topK <= 0) { return Array<SearchResult>() }
+        if (mode != "single" && mode != "representative" && mode != "group1") {
+            throw IllegalArgumentException("不支持的单向量检索模式: ${mode}")
+        }
         let results = ArrayList<SearchResult>() 
         let searchKeys = _expandedSearchKeys(keyOpt)
-
-        let distFunc = if (distanceMethod == "euclidean") { euclideanDistance } 
-                       else if (distanceMethod == "manhattan") { manhattanDistance } 
-                       else { cosineDistance }
+        let distFunc = _distanceFunc(distanceMethod)
 
         for (k in searchKeys) {
             if (!this.data.contains(k)) { continue }
@@ -540,12 +551,13 @@ public class VectorMap <: ToString {
         groupNDistanceMethod!: String = "hausdorff", distanceMethod!: String = "cosine",
         keyOpt!: Option<String> = None, vectorType!: Option<String> = None, groupType!: Option<String> = None
     ): Array<SearchResult> {
+        if (topK <= 0 || queryVectors.isEmpty()) { return Array<SearchResult>() }
+        if (groupNDistanceMethod != "hausdorff" && groupNDistanceMethod != "maxSim") {
+            throw IllegalArgumentException("不支持的多向量检索模式: ${groupNDistanceMethod}")
+        }
         let results = ArrayList<SearchResult>() 
         let searchKeys = _expandedSearchKeys(keyOpt)
-        
-        let distFunc = if (distanceMethod == "euclidean") { euclideanDistance } 
-                       else if (distanceMethod == "manhattan") { manhattanDistance } 
-                       else { cosineDistance }
+        let distFunc = _distanceFunc(distanceMethod)
 
         for (k in searchKeys) {
             if (!this.data.contains(k)) { continue }
@@ -587,10 +599,12 @@ public class VectorMap <: ToString {
         vectorType!: Option<String> = None,
         groupType!: Option<String> = None
     ): Array<SearchResult> {
+        if (topK <= 0) { return Array<SearchResult>() }
+        let expansion = if (groupExpansionFactor < 1) { 1 } else { groupExpansionFactor }
         let groups = search(
             queryVector,
             groupName: groupName,
-            topK: topK * groupExpansionFactor,
+            topK: topK * expansion,
             mode: "representative",
             distanceMethod: distanceMethod,
             keyOpt: keyOpt,
@@ -625,18 +639,18 @@ public class VectorMap <: ToString {
         numGroups!: Option<Int64> = None,
         distanceMethod!: String = "cosine"
     ): Array<SearchResult> {
+        if (topK <= 0) { return Array<SearchResult>() }
+        let effectiveBeta = clampUnit(beta)
         let groupLimit = match (numGroups) { case Some(n) => n; case None => topK }
+        if (groupLimit <= 0) { return Array<SearchResult>() }
         let distFunc = _distanceFunc(distanceMethod)
         let groupScores = ArrayList<SearchResult>()
 
         for ((key, entry) in this.data) {
             for (group in entry.groups) {
                 let repD = distFunc(queryVector, group.representative)
-                let semOpt: Option<Float64> = if (beta != 0.0) { _semanticDistance(queryKeyVector, key, distanceMethod) } else { None }
-                let mixed = match (semOpt) {
-                    case Some(semD) => beta * semD + (1.0 - beta) * repD
-                    case None => repD
-                }
+                let semOpt: Option<Float64> = if (effectiveBeta != 0.0) { _semanticDistance(queryKeyVector, key, distanceMethod) } else { None }
+                let mixed = mixedDistance(repD, semOpt, effectiveBeta)
                 groupScores.add(SearchResult(mixed, key, group, None))
             }
         }
@@ -646,13 +660,10 @@ public class VectorMap <: ToString {
         let selected = if (groupLimit < groupScores.size) { groupLimit } else { groupScores.size }
         for (gi in 0..selected) {
             let gr = groupScores[gi]
-            let semOpt: Option<Float64> = if (beta != 0.0) { _semanticDistance(queryKeyVector, gr.key, distanceMethod) } else { None }
+            let semOpt: Option<Float64> = if (effectiveBeta != 0.0) { _semanticDistance(queryKeyVector, gr.key, distanceMethod) } else { None }
             for (i in 0..gr.group.vectors.size) {
                 let embD = distFunc(queryVector, gr.group.vectors[i])
-                let mixed = match (semOpt) {
-                    case Some(semD) => beta * semD + (1.0 - beta) * embD
-                    case None => embD
-                }
+                let mixed = mixedDistance(embD, semOpt, effectiveBeta)
                 candidates.add(SearchResult(mixed, gr.key, gr.group, Some(i)))
             }
         }
@@ -669,8 +680,11 @@ public class VectorMap <: ToString {
         groupExpansionFactor!: Int64 = 1,
         distanceMethod!: String = "cosine"
     ): Array<SearchResult> {
-        if (queryKeyVector.isNone() || beta == 0.0 || this.keyVectors.isEmpty()) {
-            return searchWithRepVec(queryVector, topK: topK, groupExpansionFactor: groupExpansionFactor, distanceMethod: distanceMethod)
+        if (topK <= 0) { return Array<SearchResult>() }
+        let effectiveBeta = clampUnit(beta)
+        let expansion = if (groupExpansionFactor < 1) { 1 } else { groupExpansionFactor }
+        if (queryKeyVector.isNone() || effectiveBeta == 0.0 || this.keyVectors.isEmpty()) {
+            return searchWithRepVec(queryVector, topK: topK, groupExpansionFactor: expansion, distanceMethod: distanceMethod)
         }
         let distFunc = _distanceFunc(distanceMethod)
         let groupScores = ArrayList<SearchResult>()
@@ -678,25 +692,19 @@ public class VectorMap <: ToString {
             for (group in entry.groups) {
                 let repD = distFunc(queryVector, group.representative)
                 let semOpt = _semanticDistance(queryKeyVector, key, distanceMethod)
-                let mixed = match (semOpt) {
-                    case Some(semD) => beta * semD + (1.0 - beta) * repD
-                    case None => repD
-                }
+                let mixed = mixedDistance(repD, semOpt, effectiveBeta)
                 groupScores.add(SearchResult(mixed, key, group, None))
             }
         }
         sort(groupScores, by: {a, b => a.compare(b)})
-        let selected = if (topK * groupExpansionFactor < groupScores.size) { topK * groupExpansionFactor } else { groupScores.size }
+        let selected = if (topK * expansion < groupScores.size) { topK * expansion } else { groupScores.size }
         let candidates = ArrayList<SearchResult>()
         for (gi in 0..selected) {
             let gr = groupScores[gi]
             let semOpt = _semanticDistance(queryKeyVector, gr.key, distanceMethod)
             for (i in 0..gr.group.vectors.size) {
                 let embD = distFunc(queryVector, gr.group.vectors[i])
-                let mixed = match (semOpt) {
-                    case Some(semD) => beta * semD + (1.0 - beta) * embD
-                    case None => embD
-                }
+                let mixed = mixedDistance(embD, semOpt, effectiveBeta)
                 candidates.add(SearchResult(mixed, gr.key, gr.group, Some(i)))
             }
         }
@@ -712,6 +720,10 @@ public class VectorMap <: ToString {
         semanticBridgePerKey!: Int64 = 1,
         useMutualEmbedding!: Bool = true
     ): Unit {
+        let buildStartNs = _nowNs()
+        if (embeddingK < 0 || semanticIntraK < 0 || semanticBridgeKeys < 0 || semanticBridgePerKey < 0) {
+            throw IllegalArgumentException("HDMG 邻居参数不能为负数")
+        }
         this.hdmgNodeKeys = ArrayList<String>()
         this.hdmgNodeGroups = ArrayList<VectorGroup>()
         this.hdmgBaseKeys = ArrayList<String>()
@@ -720,12 +732,14 @@ public class VectorMap <: ToString {
         this.hdmgKeyEntries = HashMap<String, Int64>()
         this.hdmgGlobalEntry = None
         this.hdmgBuilt = false
+        this.hdmgBuiltFromVersion = -1
 
-        for ((key, entry) in this.data) {
+        for (key in _getKeysAsArray()) {
+            let entry = this.data[key]
             for (group in entry.groups) {
                 this.hdmgNodeKeys.add(key)
                 this.hdmgNodeGroups.add(group)
-                this.hdmgBaseKeys.add(_baseKey(key))
+                this.hdmgBaseKeys.add(storageBaseKey(key))
             }
         }
 
@@ -733,26 +747,18 @@ public class VectorMap <: ToString {
         if (n == 0) {
             this.hdmgLastSearchStats = HashMap<String, Any>()
             this.hdmgLastSearchStats["mode"] = "empty"
+            this.hdmgLastSearchStats["t_build_ns"] = _nowNs() - buildStartNs
             return
-        }
-
-        let distMatrix = Array<Array<Float64>>(n, { _ => Array<Float64>(n, repeat: Float64.Max) })
-        for (i in 0..n) {
-            distMatrix[i][i] = 0.0
-        }
-        for (i in 0..n) {
-            for (j in (i + 1)..n) {
-                let d = cosineDistance(this.hdmgNodeGroups[i].representative, this.hdmgNodeGroups[j].representative)
-                distMatrix[i][j] = d
-                distMatrix[j][i] = d
-            }
         }
 
         let directedKnn = ArrayList<ArrayList<Int64>>()
         for (i in 0..n) {
             let scores = ArrayList<HdmgScore>()
             for (j in 0..n) {
-                if (i != j) { scores.add(HdmgScore(distMatrix[i][j], j)) }
+                if (i != j) {
+                    let d = cosineDistance(this.hdmgNodeGroups[i].representative, this.hdmgNodeGroups[j].representative)
+                    scores.add(HdmgScore(d, j))
+                }
             }
             sort(scores, by: { a, b => a.compare(b) })
             let neighbors = ArrayList<Int64>()
@@ -804,6 +810,7 @@ public class VectorMap <: ToString {
 
         let baseKeys = ArrayList<String>()
         for ((bk, _) in baseKeyToNodeIds) { baseKeys.add(bk) }
+        sort(baseKeys, by: { a, b => a.compare(b) })
 
         for (i in 0..n) {
             let neighbors = ArrayList<Int64>()
@@ -811,7 +818,10 @@ public class VectorMap <: ToString {
             if (baseKeyToNodeIds.contains(bk)) {
                 let sameScores = ArrayList<HdmgScore>()
                 for (nid in baseKeyToNodeIds[bk]) {
-                    if (nid != i) { sameScores.add(HdmgScore(distMatrix[i][nid], nid)) }
+                    if (nid != i) {
+                        let d = cosineDistance(this.hdmgNodeGroups[i].representative, this.hdmgNodeGroups[nid].representative)
+                        sameScores.add(HdmgScore(d, nid))
+                    }
                 }
                 sort(sameScores, by: { a, b => a.compare(b) })
                 let sameLimit = if (semanticIntraK < sameScores.size) { semanticIntraK } else { sameScores.size }
@@ -837,7 +847,10 @@ public class VectorMap <: ToString {
                     let otherBk = baseKeys[keyScores[p].nodeId]
                     let cands = baseKeyToNodeIds[otherBk]
                     let candScores = ArrayList<HdmgScore>()
-                    for (nid in cands) { candScores.add(HdmgScore(distMatrix[i][nid], nid)) }
+                    for (nid in cands) {
+                        let d = cosineDistance(this.hdmgNodeGroups[i].representative, this.hdmgNodeGroups[nid].representative)
+                        candScores.add(HdmgScore(d, nid))
+                    }
                     sort(candScores, by: { a, b => a.compare(b) })
                     let candLimit = if (semanticBridgePerKey < candScores.size) { semanticBridgePerKey } else { candScores.size }
                     for (ci in 0..candLimit) {
@@ -862,6 +875,7 @@ public class VectorMap <: ToString {
         }
         this.hdmgGlobalEntry = Some(entry)
         this.hdmgBuilt = true
+        this.hdmgBuiltFromVersion = this.dataVersion
         this.hdmgLastSearchStats = HashMap<String, Any>()
         this.hdmgLastSearchStats["mode"] = "built"
         this.hdmgLastSearchStats["nodes"] = n
@@ -870,6 +884,24 @@ public class VectorMap <: ToString {
         this.hdmgLastSearchStats["semantic_bridge_keys"] = semanticBridgeKeys
         this.hdmgLastSearchStats["semantic_bridge_per_key"] = semanticBridgePerKey
         this.hdmgLastSearchStats["use_mutual_embedding"] = useMutualEmbedding
+        var embeddingEdgeCount: Int64 = 0
+        for (edges in this.hdmgEmbeddingEdges) { embeddingEdgeCount += edges.size }
+        var semanticEdgeCount: Int64 = 0
+        for (edges in this.hdmgSemanticEdges) { semanticEdgeCount += edges.size }
+        this.hdmgLastSearchStats["embedding_edges"] = embeddingEdgeCount
+        this.hdmgLastSearchStats["semantic_edges"] = semanticEdgeCount
+        this.hdmgLastSearchStats["built_from_data_version"] = this.hdmgBuiltFromVersion
+        this.hdmgLastSearchStats["t_build_ns"] = _nowNs() - buildStartNs
+    }
+
+    public func buildHdmgWithConfig(config: HdmgBuildConfig): Unit {
+        buildHdmg(
+            embeddingK: config.embeddingK,
+            semanticIntraK: config.semanticIntraK,
+            semanticBridgeKeys: config.semanticBridgeKeys,
+            semanticBridgePerKey: config.semanticBridgePerKey,
+            useMutualEmbedding: config.useMutualEmbedding
+        )
     }
 
     public func getLastHdmgSearchStats(): HashMap<String, Any> {
@@ -888,13 +920,19 @@ public class VectorMap <: ToString {
         topKeyCandidates!: Int64 = 5,
         extraHops!: Int64 = 0
     ): Array<SearchResult> {
+        if (topK <= 0) { return Array<SearchResult>() }
+        if (maxSteps < 0 || topKeyCandidates < 1 || extraHops < 0) {
+            throw IllegalArgumentException("HDMG 搜索参数非法: maxSteps=${maxSteps}, topKeyCandidates=${topKeyCandidates}, extraHops=${extraHops}")
+        }
         let searchStartNs = _nowNs()
-        let pool = match (clusterPoolSize) { case Some(v) => v; case None => topK }
-        if (!this.hdmgBuilt || this.hdmgNodeGroups.isEmpty()) {
+        let requestedPool = match (clusterPoolSize) { case Some(v) => v; case None => topK }
+        let pool = if (requestedPool < topK) { topK } else { requestedPool }
+        let effectiveAlpha = clampUnit(alpha)
+        if (!this.hdmgBuilt || this.hdmgBuiltFromVersion != this.dataVersion || this.hdmgNodeGroups.isEmpty()) {
             let fallback = searchWithMixedKeyRepVec(
                 queryVector,
                 queryKeyVector: queryKeyVector,
-                beta: alpha,
+                beta: effectiveAlpha,
                 topK: topK,
                 groupExpansionFactor: if (pool > topK) { pool } else { topK },
                 distanceMethod: distanceMethod
@@ -914,18 +952,15 @@ public class VectorMap <: ToString {
             mixedScoreCalls++
             let key = this.hdmgNodeKeys[nodeId]
             let repD = distFunc(queryVector, this.hdmgNodeGroups[nodeId].representative)
-            let semOpt = if (queryKeyVector.isSome() && alpha != 0.0) {
+            let semOpt = if (queryKeyVector.isSome() && effectiveAlpha != 0.0) {
                 _semanticDistance(queryKeyVector, key, distanceMethod)
             } else { Option<Float64>.None }
-            return match (semOpt) {
-                case Some(semD) => alpha * semD + (1.0 - alpha) * repD
-                case None => repD
-            }
+            return mixedDistance(repD, semOpt, effectiveAlpha)
         }
 
         let entryStartNs = _nowNs()
         let entries = ArrayList<Int64>()
-        if (queryKeyVector.isSome() && alpha > entryAlphaThreshold && !this.keyVectors.isEmpty()) {
+        if (queryKeyVector.isSome() && effectiveAlpha > entryAlphaThreshold && !this.keyVectors.isEmpty()) {
             let keyScores = ArrayList<HdmgScore>()
             for ((bk, nodeId) in this.hdmgKeyEntries) {
                 let semOpt = _semanticDistance(queryKeyVector, bk, distanceMethod)
@@ -1046,15 +1081,12 @@ public class VectorMap <: ToString {
             let nodeId = selectedScores[si].nodeId
             let key = this.hdmgNodeKeys[nodeId]
             let group = this.hdmgNodeGroups[nodeId]
-            let semOpt: Option<Float64> = if (queryKeyVector.isSome() && alpha != 0.0) {
+            let semOpt: Option<Float64> = if (queryKeyVector.isSome() && effectiveAlpha != 0.0) {
                 _semanticDistance(queryKeyVector, key, distanceMethod)
             } else { None }
             for (vi in 0..group.vectors.size) {
                 let embD = distFunc(queryVector, group.vectors[vi])
-                let score = match (semOpt) {
-                    case Some(semD) => alpha * semD + (1.0 - alpha) * embD
-                    case None => embD
-                }
+                let score = mixedDistance(embD, semOpt, effectiveAlpha)
                 candidates.add(SearchResult(score, key, group, Some(vi)))
             }
         }
@@ -1082,6 +1114,28 @@ public class VectorMap <: ToString {
         this.hdmgLastSearchStats["t_rerank_ns"] = rerankEndNs - rerankStartNs
         this.hdmgLastSearchStats["t_total_ns"] = rerankEndNs - searchStartNs
         return results
+    }
+
+    public func searchHdmgWithConfig(
+        queryVector: Array<Float64>,
+        queryKeyVector: Option<Array<Float64>>,
+        alpha: Float64,
+        topK: Int64,
+        config: HdmgSearchConfig,
+        distanceMethod!: String = "cosine"
+    ): Array<SearchResult> {
+        return searchHdmg(
+            queryVector,
+            queryKeyVector: queryKeyVector,
+            alpha: alpha,
+            topK: topK,
+            maxSteps: config.maxSteps,
+            distanceMethod: distanceMethod,
+            entryAlphaThreshold: config.entryAlphaThreshold,
+            clusterPoolSize: Some(topK * config.clusterPoolMultiplier),
+            topKeyCandidates: config.topKeyCandidates,
+            extraHops: config.extraHops
+        )
     }
     
     // 获取上下文向量

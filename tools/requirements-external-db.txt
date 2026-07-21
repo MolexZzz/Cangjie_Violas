@@ -1,0 +1,4 @@
+# Optional database adapters used by tools/external_db_benchmark.py
+qdrant-client
+pymilvus
+chromadb

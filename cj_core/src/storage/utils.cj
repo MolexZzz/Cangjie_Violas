@@ -8,7 +8,9 @@ import std.collection.*
 
 /* 计算向量的点积 */
 func dotProduct(a: Array<Float64>, b: Array<Float64>): Float64 {
-    if (a.size != b.size) { return 0.0 }
+    if (a.size != b.size) {
+        throw IllegalArgumentException("向量维度不一致: ${a.size} != ${b.size}")
+    }
     var sum = 0.0
     for (i in 0..a.size) { sum += a[i] * b[i] }
     return sum
@@ -33,7 +35,9 @@ public func cosineDistance(a: Array<Float64>, b: Array<Float64>): Float64 {
 }
 
 public func euclideanDistance(a: Array<Float64>, b: Array<Float64>): Float64 {
-    if (a.size != b.size) { return 0.0 }
+    if (a.size != b.size) {
+        throw IllegalArgumentException("向量维度不一致: ${a.size} != ${b.size}")
+    }
     var sum = 0.0
     for (i in 0..a.size) {
         let diff = a[i] - b[i]
@@ -47,7 +51,9 @@ public func euclideanSimilarity(a: Array<Float64>, b: Array<Float64>): Float64 {
 }
 
 public func manhattanDistance(a: Array<Float64>, b: Array<Float64>): Float64 {
-    if (a.size != b.size) { return 0.0 }
+    if (a.size != b.size) {
+        throw IllegalArgumentException("向量维度不一致: ${a.size} != ${b.size}")
+    }
     var sum = 0.0
     for (i in 0..a.size) { sum += abs(a[i] - b[i]) }
     return sum

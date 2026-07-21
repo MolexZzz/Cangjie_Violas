@@ -4,6 +4,7 @@ import std.collection.*
 import std.fs.*
 import std.core.*
 import std.convert.*
+import std.sort.*
 
 public struct FoldRep {
     public let trainRep: Array<Float64>
@@ -53,6 +54,11 @@ public class EvalScale {
         vectorType: String,
         repMethod: String
     ) {
+        if (nFolds < 2) { throw IllegalArgumentException("nFolds 必须至少为 2") }
+        if (maxFolders < 0 || maxQueries < 0 || maxVectorsPerFolder < 0) {
+            throw IllegalArgumentException("评测规模限制不能为负数")
+        }
+        if (topK <= 0) { throw IllegalArgumentException("topK 必须大于 0") }
         this.nFolds = nFolds
         this.maxFolders = maxFolders
         this.maxQueries = maxQueries
@@ -77,6 +83,61 @@ public class EvalScale {
     }
 }
 
+// 集中保存对齐实验所需的算法参数，避免 benchmark 与核心调用点各自写死一套值。
+public class AlignedBenchmarkConfig {
+    public let clusterAlpha: Float64
+    public let betaValues: Array<Float64>
+    public let embeddingK: Int64
+    public let semanticIntraK: Int64
+    public let semanticBridgeKeys: Int64
+    public let semanticBridgePerKey: Int64
+    public let useMutualEmbedding: Bool
+    public let clusterPoolMultiplier: Int64
+    public let maxSteps: Int64
+    public let entryAlphaThreshold: Float64
+    public let topKeyCandidates: Int64
+    public let extraHops: Int64
+
+    public init(
+        clusterAlpha!: Float64 = 0.5,
+        betaValues!: Array<Float64> = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+        embeddingK!: Int64 = 12,
+        semanticIntraK!: Int64 = 20,
+        semanticBridgeKeys!: Int64 = 2,
+        semanticBridgePerKey!: Int64 = 1,
+        useMutualEmbedding!: Bool = false,
+        clusterPoolMultiplier!: Int64 = 3,
+        maxSteps!: Int64 = 100,
+        entryAlphaThreshold!: Float64 = 0.3,
+        topKeyCandidates!: Int64 = 5,
+        extraHops!: Int64 = 0
+    ) {
+        if (clusterAlpha < 0.0 || clusterAlpha > 1.0 || betaValues.isEmpty()) {
+            throw IllegalArgumentException("benchmark alpha/beta 配置非法")
+        }
+        for (beta in betaValues) {
+            if (beta < 0.0 || beta > 1.0) { throw IllegalArgumentException("beta 必须位于 [0, 1]") }
+        }
+        if (embeddingK < 0 || semanticIntraK < 0 || semanticBridgeKeys < 0 ||
+            semanticBridgePerKey < 0 || clusterPoolMultiplier < 1 || maxSteps < 0 ||
+            topKeyCandidates < 1 || extraHops < 0) {
+            throw IllegalArgumentException("benchmark HDMG 配置非法")
+        }
+        this.clusterAlpha = clusterAlpha
+        this.betaValues = betaValues
+        this.embeddingK = embeddingK
+        this.semanticIntraK = semanticIntraK
+        this.semanticBridgeKeys = semanticBridgeKeys
+        this.semanticBridgePerKey = semanticBridgePerKey
+        this.useMutualEmbedding = useMutualEmbedding
+        this.clusterPoolMultiplier = clusterPoolMultiplier
+        this.maxSteps = maxSteps
+        this.entryAlphaThreshold = entryAlphaThreshold
+        this.topKeyCandidates = topKeyCandidates
+        this.extraHops = extraHops
+    }
+}
+
 func parseLine(
     trimmed: String,
     dataset: HashMap<String, FolderData>,
@@ -89,6 +150,7 @@ func parseLine(
     let parts = trimmed.split("|")
     let cmd = parts[0]
     if (cmd == "FOLDER") {
+        if (parts.size < 3) { throw IllegalArgumentException("FOLDER 行至少需要 name 和 key: ${trimmed}") }
         let typ = if (parts.size > 3) { parts[3] } else { "DATA" }
         let fd = FolderData(parts[1], parts[2], typ)
         dataset[parts[1]] = fd
@@ -100,20 +162,30 @@ func parseLine(
     }
     let fd = fdOpt.getOrThrow()
     if (cmd == "VECTOR") {
+        if (parts.size < 3) { throw IllegalArgumentException("VECTOR 行缺少 description 或 vector") }
         if (maxVectorsPerFolder > 0 && fd.vectors.size >= maxVectorsPerFolder) {
             return current
         }
         let vecStrs = parts[2].split(",")
         let vec = Array<Float64>(vecStrs.size, { i => Float64.parse(vecStrs[i]) })
+        if (vec.isEmpty()) { throw IllegalArgumentException("VECTOR 不能为空: folder=${fd.folderName}") }
+        if (!fd.vectors.isEmpty() && fd.vectors[0].size != vec.size) {
+            throw IllegalArgumentException("VECTOR 维度不一致: folder=${fd.folderName}, ${vec.size} != ${fd.vectors[0].size}")
+        }
         fd.descriptions.add(parts[1])
         fd.vectors.add(vec)
     } else if (cmd == "GLOBAL_REP") {
+        if (parts.size < 2) { throw IllegalArgumentException("GLOBAL_REP 行缺少方法名") }
         if (parts.size > 2 && !parts[2].isEmpty()) {
             let repStrs = parts[2].split(",")
             let rep = Array<Float64>(repStrs.size, { i => Float64.parse(repStrs[i]) })
+            if (!fd.vectors.isEmpty() && fd.vectors[0].size != rep.size) {
+                throw IllegalArgumentException("GLOBAL_REP 维度不一致: folder=${fd.folderName}")
+            }
             fd.globalReps[parts[1]] = rep
         }
     } else if (cmd == "FOLD_REP") {
+        if (parts.size < 2) { throw IllegalArgumentException("FOLD_REP 行缺少方法名") }
         let trRep = if (parts.size > 3 && !parts[3].isEmpty()) {
             let trStrs = parts[3].split(",")
             Array<Float64>(trStrs.size, { i => Float64.parse(trStrs[i]) })
@@ -122,6 +194,12 @@ func parseLine(
             let teStrs = parts[4].split(",")
             Array<Float64>(teStrs.size, { i => Float64.parse(teStrs[i]) })
         } else { Array<Float64>() }
+        if (!fd.vectors.isEmpty()) {
+            let dim = fd.vectors[0].size
+            if ((!trRep.isEmpty() && trRep.size != dim) || (!teRep.isEmpty() && teRep.size != dim)) {
+                throw IllegalArgumentException("FOLD_REP 维度不一致: folder=${fd.folderName}")
+            }
+        }
         if (!fd.foldReps.contains(parts[1])) {
             fd.foldReps[parts[1]] = ArrayList<FoldRep>()
         }
@@ -184,10 +262,13 @@ public func limitDataset(
         return dataset
     }
     let limited = HashMap<String, FolderData>()
+    let names = ArrayList<String>()
+    for ((name, _) in dataset) { names.add(name) }
+    sort(names, by: { a, b => a.compare(b) })
     var n: Int64 = 0
-    for ((name, data) in dataset) {
+    for (name in names) {
         if (n >= maxFolders) { break }
-        limited[name] = data
+        limited[name] = dataset[name]
         n++
     }
     return limited

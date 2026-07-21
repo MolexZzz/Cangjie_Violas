@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "pythonReference": "violas_python (read-only)",
+  "pythonVersion": "3.13.14",
+  "numpyVersion": "2.3.5",
+  "sklearnVersion": "1.8.0",
+  "fixture": "alternating-two-cluster-v1",
+  "comparisons": {
+    "clusters": {
+      "python": "item-0,item-10,item-12,item-14,item-2,item-4,item-6,item-8;item-1,item-11,item-13,item-15,item-3,item-5,item-7,item-9",
+      "cangjie": "item-0,item-10,item-12,item-14,item-2,item-4,item-6,item-8;item-1,item-11,item-13,item-15,item-3,item-5,item-7,item-9",
+      "equal": true
+    },
+    "search.left": {
+      "python": "item-0,item-2,item-4",
+      "cangjie": "item-0,item-2,item-4",
+      "equal": true
+    },
+    "search.right": {
+      "python": "item-1,item-3,item-5",
+      "cangjie": "item-1,item-3,item-5",
+      "equal": true
+    }
+  },
+  "allEqual": true
+}

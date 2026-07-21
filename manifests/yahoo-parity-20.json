@@ -1,0 +1,1319 @@
+{
+  "schemaVersion": 1,
+  "pythonReference": "violas_python (read-only)",
+  "scope": "repository sample artifacts; not full datasets",
+  "datasets": [
+    {
+      "datasetId": "3",
+      "dataset": "yahoo",
+      "maxVectorsPerFolder": 20,
+      "fold": 0,
+      "beta": 0.3,
+      "topK": 3,
+      "methods": {
+        "exact": {
+          "queries": 20,
+          "sameOrderRate": 1.0,
+          "meanOverlapAt3": 1.0
+        },
+        "representative": {
+          "queries": 20,
+          "sameOrderRate": 0.7,
+          "meanOverlapAt3": 0.9
+        },
+        "mixed": {
+          "queries": 20,
+          "sameOrderRate": 0.95,
+          "meanOverlapAt3": 0.9833333333333334
+        },
+        "hdmg": {
+          "queries": 20,
+          "sameOrderRate": 0.9,
+          "meanOverlapAt3": 0.9666666666666666
+        }
+      },
+      "queries": [
+        {
+          "queryId": "3/fold-0/1 = Society & Culture/00000000",
+          "method": "exact",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000007",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000007",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/1 = Society & Culture/00000001",
+          "method": "exact",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/1 = Society & Culture/00000002",
+          "method": "exact",
+          "python": [
+            "5 = Computers & Internet::5 = Computers & Internet/00000018",
+            "5 = Computers & Internet::5 = Computers & Internet/00000005",
+            "6 = Sports::6 = Sports/00000018"
+          ],
+          "cangjie": [
+            "5 = Computers & Internet::5 = Computers & Internet/00000018",
+            "5 = Computers & Internet::5 = Computers & Internet/00000005",
+            "6 = Sports::6 = Sports/00000018"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/1 = Society & Culture/00000003",
+          "method": "exact",
+          "python": [
+            "1 = Society & Culture::1 = Society & Culture/00000008",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000006",
+            "4 = Education & Reference::4 = Education & Reference/00000006"
+          ],
+          "cangjie": [
+            "1 = Society & Culture::1 = Society & Culture/00000008",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000006",
+            "4 = Education & Reference::4 = Education & Reference/00000006"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/10 = Politics & Government/00000000",
+          "method": "exact",
+          "python": [
+            "7 = Business & Finance::7 = Business & Finance/00000012",
+            "7 = Business & Finance::7 = Business & Finance/00000013",
+            "4 = Education & Reference::4 = Education & Reference/00000019"
+          ],
+          "cangjie": [
+            "7 = Business & Finance::7 = Business & Finance/00000012",
+            "7 = Business & Finance::7 = Business & Finance/00000013",
+            "4 = Education & Reference::4 = Education & Reference/00000019"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/10 = Politics & Government/00000001",
+          "method": "exact",
+          "python": [
+            "7 = Business & Finance::7 = Business & Finance/00000018",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010",
+            "1 = Society & Culture::1 = Society & Culture/00000014"
+          ],
+          "cangjie": [
+            "7 = Business & Finance::7 = Business & Finance/00000018",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010",
+            "1 = Society & Culture::1 = Society & Culture/00000014"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/10 = Politics & Government/00000002",
+          "method": "exact",
+          "python": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "cangjie": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/10 = Politics & Government/00000003",
+          "method": "exact",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000009",
+            "7 = Business & Finance::7 = Business & Finance/00000012"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000009",
+            "7 = Business & Finance::7 = Business & Finance/00000012"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/2 = Science & Mathematics/00000000",
+          "method": "exact",
+          "python": [
+            "4 = Education & Reference::4 = Education & Reference/00000016",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000013",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000015"
+          ],
+          "cangjie": [
+            "4 = Education & Reference::4 = Education & Reference/00000016",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000013",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000015"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/2 = Science & Mathematics/00000001",
+          "method": "exact",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000015",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000011",
+            "3 = Health::3 = Health/00000014"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000015",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000011",
+            "3 = Health::3 = Health/00000014"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/2 = Science & Mathematics/00000002",
+          "method": "exact",
+          "python": [
+            "4 = Education & Reference::4 = Education & Reference/00000011",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000019",
+            "3 = Health::3 = Health/00000019"
+          ],
+          "cangjie": [
+            "4 = Education & Reference::4 = Education & Reference/00000011",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000019",
+            "3 = Health::3 = Health/00000019"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/2 = Science & Mathematics/00000003",
+          "method": "exact",
+          "python": [
+            "5 = Computers & Internet::5 = Computers & Internet/00000011",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000014",
+            "5 = Computers & Internet::5 = Computers & Internet/00000010"
+          ],
+          "cangjie": [
+            "5 = Computers & Internet::5 = Computers & Internet/00000011",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000014",
+            "5 = Computers & Internet::5 = Computers & Internet/00000010"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/3 = Health/00000000",
+          "method": "exact",
+          "python": [
+            "3 = Health::3 = Health/00000008",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000009",
+            "3 = Health::3 = Health/00000005"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000008",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000009",
+            "3 = Health::3 = Health/00000005"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/3 = Health/00000001",
+          "method": "exact",
+          "python": [
+            "1 = Society & Culture::1 = Society & Culture/00000007",
+            "3 = Health::3 = Health/00000008",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000014"
+          ],
+          "cangjie": [
+            "1 = Society & Culture::1 = Society & Culture/00000007",
+            "3 = Health::3 = Health/00000008",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000014"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/3 = Health/00000002",
+          "method": "exact",
+          "python": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "3 = Health::3 = Health/00000005"
+          ],
+          "cangjie": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "3 = Health::3 = Health/00000005"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/3 = Health/00000003",
+          "method": "exact",
+          "python": [
+            "3 = Health::3 = Health/00000016",
+            "3 = Health::3 = Health/00000015",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000004"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000016",
+            "3 = Health::3 = Health/00000015",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000004"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/4 = Education & Reference/00000000",
+          "method": "exact",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000012",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000012",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/4 = Education & Reference/00000001",
+          "method": "exact",
+          "python": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "7 = Business & Finance::7 = Business & Finance/00000010",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008"
+          ],
+          "cangjie": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "7 = Business & Finance::7 = Business & Finance/00000010",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/4 = Education & Reference/00000002",
+          "method": "exact",
+          "python": [
+            "3 = Health::3 = Health/00000012",
+            "5 = Computers & Internet::5 = Computers & Internet/00000014",
+            "10 = Politics & Government::10 = Politics & Government/00000008"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000012",
+            "5 = Computers & Internet::5 = Computers & Internet/00000014",
+            "10 = Politics & Government::10 = Politics & Government/00000008"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/4 = Education & Reference/00000003",
+          "method": "exact",
+          "python": [
+            "3 = Health::3 = Health/00000012",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "1 = Society & Culture::1 = Society & Culture/00000004"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000012",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "1 = Society & Culture::1 = Society & Culture/00000004"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/1 = Society & Culture/00000000",
+          "method": "representative",
+          "python": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000014",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "cangjie": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000007",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000014"
+          ],
+          "sameOrder": false,
+          "overlapAt3": 0.6666666666666666
+        },
+        {
+          "queryId": "3/fold-0/1 = Society & Culture/00000001",
+          "method": "representative",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/1 = Society & Culture/00000002",
+          "method": "representative",
+          "python": [
+            "5 = Computers & Internet::5 = Computers & Internet/00000018",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000013",
+            "5 = Computers & Internet::5 = Computers & Internet/00000005"
+          ],
+          "cangjie": [
+            "5 = Computers & Internet::5 = Computers & Internet/00000018",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000013",
+            "5 = Computers & Internet::5 = Computers & Internet/00000005"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/1 = Society & Culture/00000003",
+          "method": "representative",
+          "python": [
+            "1 = Society & Culture::1 = Society & Culture/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000006",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000017"
+          ],
+          "cangjie": [
+            "1 = Society & Culture::1 = Society & Culture/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000006",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000017"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/10 = Politics & Government/00000000",
+          "method": "representative",
+          "python": [
+            "7 = Business & Finance::7 = Business & Finance/00000012",
+            "7 = Business & Finance::7 = Business & Finance/00000013",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000007"
+          ],
+          "cangjie": [
+            "7 = Business & Finance::7 = Business & Finance/00000012",
+            "7 = Business & Finance::7 = Business & Finance/00000013",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000007"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/10 = Politics & Government/00000001",
+          "method": "representative",
+          "python": [
+            "7 = Business & Finance::7 = Business & Finance/00000018",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010",
+            "7 = Business & Finance::7 = Business & Finance/00000016"
+          ],
+          "cangjie": [
+            "7 = Business & Finance::7 = Business & Finance/00000018",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010",
+            "7 = Business & Finance::7 = Business & Finance/00000016"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/10 = Politics & Government/00000002",
+          "method": "representative",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/10 = Politics & Government/00000003",
+          "method": "representative",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000009",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000013"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000009",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000013"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/2 = Science & Mathematics/00000000",
+          "method": "representative",
+          "python": [
+            "4 = Education & Reference::4 = Education & Reference/00000016",
+            "5 = Computers & Internet::5 = Computers & Internet/00000017",
+            "10 = Politics & Government::10 = Politics & Government/00000016"
+          ],
+          "cangjie": [
+            "4 = Education & Reference::4 = Education & Reference/00000016",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000015",
+            "5 = Computers & Internet::5 = Computers & Internet/00000017"
+          ],
+          "sameOrder": false,
+          "overlapAt3": 0.6666666666666666
+        },
+        {
+          "queryId": "3/fold-0/2 = Science & Mathematics/00000001",
+          "method": "representative",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000015",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000011",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000015",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000011",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/2 = Science & Mathematics/00000002",
+          "method": "representative",
+          "python": [
+            "4 = Education & Reference::4 = Education & Reference/00000011",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000019",
+            "4 = Education & Reference::4 = Education & Reference/00000005"
+          ],
+          "cangjie": [
+            "4 = Education & Reference::4 = Education & Reference/00000011",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000019",
+            "4 = Education & Reference::4 = Education & Reference/00000005"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/2 = Science & Mathematics/00000003",
+          "method": "representative",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000014",
+            "5 = Computers & Internet::5 = Computers & Internet/00000011",
+            "3 = Health::3 = Health/00000013"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000014",
+            "5 = Computers & Internet::5 = Computers & Internet/00000011",
+            "5 = Computers & Internet::5 = Computers & Internet/00000010"
+          ],
+          "sameOrder": false,
+          "overlapAt3": 0.6666666666666666
+        },
+        {
+          "queryId": "3/fold-0/3 = Health/00000000",
+          "method": "representative",
+          "python": [
+            "3 = Health::3 = Health/00000008",
+            "3 = Health::3 = Health/00000005",
+            "3 = Health::3 = Health/00000015"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000008",
+            "3 = Health::3 = Health/00000005",
+            "3 = Health::3 = Health/00000015"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/3 = Health/00000001",
+          "method": "representative",
+          "python": [
+            "3 = Health::3 = Health/00000008",
+            "3 = Health::3 = Health/00000016",
+            "3 = Health::3 = Health/00000007"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000008",
+            "3 = Health::3 = Health/00000016",
+            "3 = Health::3 = Health/00000007"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/3 = Health/00000002",
+          "method": "representative",
+          "python": [
+            "3 = Health::3 = Health/00000005",
+            "7 = Business & Finance::7 = Business & Finance/00000007",
+            "3 = Health::3 = Health/00000016"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000005",
+            "7 = Business & Finance::7 = Business & Finance/00000007",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008"
+          ],
+          "sameOrder": false,
+          "overlapAt3": 0.6666666666666666
+        },
+        {
+          "queryId": "3/fold-0/3 = Health/00000003",
+          "method": "representative",
+          "python": [
+            "3 = Health::3 = Health/00000016",
+            "3 = Health::3 = Health/00000015",
+            "3 = Health::3 = Health/00000008"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000016",
+            "3 = Health::3 = Health/00000015",
+            "3 = Health::3 = Health/00000008"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/4 = Education & Reference/00000000",
+          "method": "representative",
+          "python": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004",
+            "10 = Politics & Government::10 = Politics & Government/00000010"
+          ],
+          "cangjie": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "10 = Politics & Government::10 = Politics & Government/00000010",
+            "4 = Education & Reference::4 = Education & Reference/00000007"
+          ],
+          "sameOrder": false,
+          "overlapAt3": 0.6666666666666666
+        },
+        {
+          "queryId": "3/fold-0/4 = Education & Reference/00000001",
+          "method": "representative",
+          "python": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "7 = Business & Finance::7 = Business & Finance/00000010",
+            "4 = Education & Reference::4 = Education & Reference/00000007"
+          ],
+          "cangjie": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "7 = Business & Finance::7 = Business & Finance/00000010",
+            "4 = Education & Reference::4 = Education & Reference/00000007"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/4 = Education & Reference/00000002",
+          "method": "representative",
+          "python": [
+            "3 = Health::3 = Health/00000012",
+            "5 = Computers & Internet::5 = Computers & Internet/00000014",
+            "3 = Health::3 = Health/00000013"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000012",
+            "5 = Computers & Internet::5 = Computers & Internet/00000014",
+            "4 = Education & Reference::4 = Education & Reference/00000013"
+          ],
+          "sameOrder": false,
+          "overlapAt3": 0.6666666666666666
+        },
+        {
+          "queryId": "3/fold-0/4 = Education & Reference/00000003",
+          "method": "representative",
+          "python": [
+            "3 = Health::3 = Health/00000012",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "5 = Computers & Internet::5 = Computers & Internet/00000019"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000012",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "5 = Computers & Internet::5 = Computers & Internet/00000019"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/1 = Society & Culture/00000000",
+          "method": "mixed",
+          "python": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000007",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008"
+          ],
+          "cangjie": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000007",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/1 = Society & Culture/00000001",
+          "method": "mixed",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/1 = Society & Culture/00000002",
+          "method": "mixed",
+          "python": [
+            "4 = Education & Reference::4 = Education & Reference/00000013",
+            "5 = Computers & Internet::5 = Computers & Internet/00000018",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000013"
+          ],
+          "cangjie": [
+            "4 = Education & Reference::4 = Education & Reference/00000013",
+            "5 = Computers & Internet::5 = Computers & Internet/00000018",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000013"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/1 = Society & Culture/00000003",
+          "method": "mixed",
+          "python": [
+            "1 = Society & Culture::1 = Society & Culture/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000006",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000006"
+          ],
+          "cangjie": [
+            "1 = Society & Culture::1 = Society & Culture/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000006",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000006"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/10 = Politics & Government/00000000",
+          "method": "mixed",
+          "python": [
+            "7 = Business & Finance::7 = Business & Finance/00000012",
+            "7 = Business & Finance::7 = Business & Finance/00000013",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000007"
+          ],
+          "cangjie": [
+            "7 = Business & Finance::7 = Business & Finance/00000012",
+            "7 = Business & Finance::7 = Business & Finance/00000013",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000007"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/10 = Politics & Government/00000001",
+          "method": "mixed",
+          "python": [
+            "7 = Business & Finance::7 = Business & Finance/00000018",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010",
+            "7 = Business & Finance::7 = Business & Finance/00000016"
+          ],
+          "cangjie": [
+            "7 = Business & Finance::7 = Business & Finance/00000018",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010",
+            "7 = Business & Finance::7 = Business & Finance/00000016"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/10 = Politics & Government/00000002",
+          "method": "mixed",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/10 = Politics & Government/00000003",
+          "method": "mixed",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000009",
+            "7 = Business & Finance::7 = Business & Finance/00000012"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000009",
+            "7 = Business & Finance::7 = Business & Finance/00000012"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/2 = Science & Mathematics/00000000",
+          "method": "mixed",
+          "python": [
+            "4 = Education & Reference::4 = Education & Reference/00000016",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000015",
+            "5 = Computers & Internet::5 = Computers & Internet/00000007"
+          ],
+          "cangjie": [
+            "4 = Education & Reference::4 = Education & Reference/00000016",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000015",
+            "5 = Computers & Internet::5 = Computers & Internet/00000007"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/2 = Science & Mathematics/00000001",
+          "method": "mixed",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000015",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000011",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000015",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000011",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/2 = Science & Mathematics/00000002",
+          "method": "mixed",
+          "python": [
+            "4 = Education & Reference::4 = Education & Reference/00000011",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000019",
+            "3 = Health::3 = Health/00000019"
+          ],
+          "cangjie": [
+            "4 = Education & Reference::4 = Education & Reference/00000011",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000019",
+            "3 = Health::3 = Health/00000019"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/2 = Science & Mathematics/00000003",
+          "method": "mixed",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000014",
+            "5 = Computers & Internet::5 = Computers & Internet/00000011",
+            "5 = Computers & Internet::5 = Computers & Internet/00000010"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000014",
+            "5 = Computers & Internet::5 = Computers & Internet/00000011",
+            "5 = Computers & Internet::5 = Computers & Internet/00000010"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/3 = Health/00000000",
+          "method": "mixed",
+          "python": [
+            "3 = Health::3 = Health/00000008",
+            "3 = Health::3 = Health/00000005",
+            "3 = Health::3 = Health/00000015"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000008",
+            "3 = Health::3 = Health/00000005",
+            "3 = Health::3 = Health/00000015"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/3 = Health/00000001",
+          "method": "mixed",
+          "python": [
+            "3 = Health::3 = Health/00000008",
+            "3 = Health::3 = Health/00000016",
+            "1 = Society & Culture::1 = Society & Culture/00000007"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000008",
+            "3 = Health::3 = Health/00000016",
+            "1 = Society & Culture::1 = Society & Culture/00000007"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/3 = Health/00000002",
+          "method": "mixed",
+          "python": [
+            "3 = Health::3 = Health/00000005",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "7 = Business & Finance::7 = Business & Finance/00000007"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000005",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "7 = Business & Finance::7 = Business & Finance/00000007"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/3 = Health/00000003",
+          "method": "mixed",
+          "python": [
+            "3 = Health::3 = Health/00000016",
+            "3 = Health::3 = Health/00000015",
+            "3 = Health::3 = Health/00000008"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000016",
+            "3 = Health::3 = Health/00000015",
+            "3 = Health::3 = Health/00000008"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/4 = Education & Reference/00000000",
+          "method": "mixed",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "cangjie": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000012"
+          ],
+          "sameOrder": false,
+          "overlapAt3": 0.6666666666666666
+        },
+        {
+          "queryId": "3/fold-0/4 = Education & Reference/00000001",
+          "method": "mixed",
+          "python": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "7 = Business & Finance::7 = Business & Finance/00000010",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008"
+          ],
+          "cangjie": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "7 = Business & Finance::7 = Business & Finance/00000010",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/4 = Education & Reference/00000002",
+          "method": "mixed",
+          "python": [
+            "3 = Health::3 = Health/00000012",
+            "5 = Computers & Internet::5 = Computers & Internet/00000014",
+            "4 = Education & Reference::4 = Education & Reference/00000013"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000012",
+            "5 = Computers & Internet::5 = Computers & Internet/00000014",
+            "4 = Education & Reference::4 = Education & Reference/00000013"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/4 = Education & Reference/00000003",
+          "method": "mixed",
+          "python": [
+            "3 = Health::3 = Health/00000012",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "5 = Computers & Internet::5 = Computers & Internet/00000019"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000012",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "5 = Computers & Internet::5 = Computers & Internet/00000019"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/1 = Society & Culture/00000000",
+          "method": "hdmg",
+          "python": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000007",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008"
+          ],
+          "cangjie": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000007",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/1 = Society & Culture/00000001",
+          "method": "hdmg",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/1 = Society & Culture/00000002",
+          "method": "hdmg",
+          "python": [
+            "4 = Education & Reference::4 = Education & Reference/00000013",
+            "5 = Computers & Internet::5 = Computers & Internet/00000018",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000013"
+          ],
+          "cangjie": [
+            "4 = Education & Reference::4 = Education & Reference/00000013",
+            "5 = Computers & Internet::5 = Computers & Internet/00000018",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000013"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/1 = Society & Culture/00000003",
+          "method": "hdmg",
+          "python": [
+            "1 = Society & Culture::1 = Society & Culture/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000006",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000006"
+          ],
+          "cangjie": [
+            "1 = Society & Culture::1 = Society & Culture/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000006",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000006"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/10 = Politics & Government/00000000",
+          "method": "hdmg",
+          "python": [
+            "7 = Business & Finance::7 = Business & Finance/00000012",
+            "7 = Business & Finance::7 = Business & Finance/00000013",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000007"
+          ],
+          "cangjie": [
+            "7 = Business & Finance::7 = Business & Finance/00000012",
+            "7 = Business & Finance::7 = Business & Finance/00000013",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000007"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/10 = Politics & Government/00000001",
+          "method": "hdmg",
+          "python": [
+            "7 = Business & Finance::7 = Business & Finance/00000018",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010",
+            "7 = Business & Finance::7 = Business & Finance/00000016"
+          ],
+          "cangjie": [
+            "7 = Business & Finance::7 = Business & Finance/00000018",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010",
+            "7 = Business & Finance::7 = Business & Finance/00000016"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/10 = Politics & Government/00000002",
+          "method": "hdmg",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/10 = Politics & Government/00000003",
+          "method": "hdmg",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000009",
+            "7 = Business & Finance::7 = Business & Finance/00000012"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000009",
+            "7 = Business & Finance::7 = Business & Finance/00000012"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/2 = Science & Mathematics/00000000",
+          "method": "hdmg",
+          "python": [
+            "4 = Education & Reference::4 = Education & Reference/00000016",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000015",
+            "5 = Computers & Internet::5 = Computers & Internet/00000007"
+          ],
+          "cangjie": [
+            "4 = Education & Reference::4 = Education & Reference/00000016",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000015",
+            "5 = Computers & Internet::5 = Computers & Internet/00000007"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/2 = Science & Mathematics/00000001",
+          "method": "hdmg",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000015",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000011",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000015",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000011",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000010"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/2 = Science & Mathematics/00000002",
+          "method": "hdmg",
+          "python": [
+            "4 = Education & Reference::4 = Education & Reference/00000011",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000019",
+            "3 = Health::3 = Health/00000019"
+          ],
+          "cangjie": [
+            "4 = Education & Reference::4 = Education & Reference/00000011",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000019",
+            "3 = Health::3 = Health/00000019"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/2 = Science & Mathematics/00000003",
+          "method": "hdmg",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000014",
+            "5 = Computers & Internet::5 = Computers & Internet/00000011",
+            "5 = Computers & Internet::5 = Computers & Internet/00000010"
+          ],
+          "cangjie": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000014",
+            "5 = Computers & Internet::5 = Computers & Internet/00000011",
+            "5 = Computers & Internet::5 = Computers & Internet/00000010"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/3 = Health/00000000",
+          "method": "hdmg",
+          "python": [
+            "3 = Health::3 = Health/00000008",
+            "3 = Health::3 = Health/00000005",
+            "3 = Health::3 = Health/00000015"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000008",
+            "3 = Health::3 = Health/00000005",
+            "3 = Health::3 = Health/00000015"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/3 = Health/00000001",
+          "method": "hdmg",
+          "python": [
+            "3 = Health::3 = Health/00000008",
+            "3 = Health::3 = Health/00000016",
+            "1 = Society & Culture::1 = Society & Culture/00000007"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000008",
+            "3 = Health::3 = Health/00000016",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000014"
+          ],
+          "sameOrder": false,
+          "overlapAt3": 0.6666666666666666
+        },
+        {
+          "queryId": "3/fold-0/3 = Health/00000002",
+          "method": "hdmg",
+          "python": [
+            "3 = Health::3 = Health/00000005",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "7 = Business & Finance::7 = Business & Finance/00000007"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000005",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "7 = Business & Finance::7 = Business & Finance/00000007"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/3 = Health/00000003",
+          "method": "hdmg",
+          "python": [
+            "3 = Health::3 = Health/00000016",
+            "3 = Health::3 = Health/00000015",
+            "3 = Health::3 = Health/00000008"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000016",
+            "3 = Health::3 = Health/00000015",
+            "3 = Health::3 = Health/00000008"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/4 = Education & Reference/00000000",
+          "method": "hdmg",
+          "python": [
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004"
+          ],
+          "cangjie": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "4 = Education & Reference::4 = Education & Reference/00000004",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000012"
+          ],
+          "sameOrder": false,
+          "overlapAt3": 0.6666666666666666
+        },
+        {
+          "queryId": "3/fold-0/4 = Education & Reference/00000001",
+          "method": "hdmg",
+          "python": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "7 = Business & Finance::7 = Business & Finance/00000010",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008"
+          ],
+          "cangjie": [
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "7 = Business & Finance::7 = Business & Finance/00000010",
+            "2 = Science & Mathematics::2 = Science & Mathematics/00000008"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/4 = Education & Reference/00000002",
+          "method": "hdmg",
+          "python": [
+            "3 = Health::3 = Health/00000012",
+            "5 = Computers & Internet::5 = Computers & Internet/00000014",
+            "4 = Education & Reference::4 = Education & Reference/00000013"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000012",
+            "5 = Computers & Internet::5 = Computers & Internet/00000014",
+            "4 = Education & Reference::4 = Education & Reference/00000013"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        },
+        {
+          "queryId": "3/fold-0/4 = Education & Reference/00000003",
+          "method": "hdmg",
+          "python": [
+            "3 = Health::3 = Health/00000012",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "5 = Computers & Internet::5 = Computers & Internet/00000019"
+          ],
+          "cangjie": [
+            "3 = Health::3 = Health/00000012",
+            "8 = Entertainment & Music::8 = Entertainment & Music/00000008",
+            "5 = Computers & Internet::5 = Computers & Internet/00000019"
+          ],
+          "sameOrder": true,
+          "overlapAt3": 1.0
+        }
+      ]
+    }
+  ]
+}

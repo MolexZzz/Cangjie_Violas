@@ -5,6 +5,7 @@ import std.core.*
 import std.convert.*
 import std.sort.*
 import std.time.*
+import std.math.*
 import semanticvg_cj.storage.*
 
 // 与 Python 20news_bench 默认 TOP_K 对齐
@@ -13,11 +14,15 @@ let defaultTopK: Int64 = 3
 public class MethodRecallStats {
     public let label: String
     public let recalls: ArrayList<Float64>
+    public let ndcgs: ArrayList<Float64>
+    public let latencyNs: ArrayList<Int64>
     public var totalLatencyNs: Int64
 
     public init(label: String) {
         this.label = label
         this.recalls = ArrayList<Float64>()
+        this.ndcgs = ArrayList<Float64>()
+        this.latencyNs = ArrayList<Int64>()
         this.totalLatencyNs = 0
     }
 
@@ -47,8 +52,31 @@ public class MethodRecallStats {
     }
 
     public func avgLatencyMs(): Float64 {
-        if (recalls.isEmpty()) { return 0.0 }
-        return Float64(totalLatencyNs) / 1000000.0 / Float64(recalls.size)
+        if (latencyNs.isEmpty()) { return 0.0 }
+        return Float64(totalLatencyNs) / 1000000.0 / Float64(latencyNs.size)
+    }
+
+    public func avgNdcg(): Float64 {
+        if (ndcgs.isEmpty()) { return 0.0 }
+        var s = 0.0
+        for (v in ndcgs) { s += v }
+        return s / Float64(ndcgs.size)
+    }
+
+    public func addLatency(ns: Int64): Unit {
+        latencyNs.add(ns)
+        totalLatencyNs += ns
+    }
+
+    public func percentileLatencyMs(percentile: Float64): Float64 {
+        if (latencyNs.isEmpty()) { return 0.0 }
+        let values = ArrayList<Int64>(latencyNs)
+        sort(values, by: { a, b =>
+            if (a < b) { Ordering.LT } else if (a > b) { Ordering.GT } else { Ordering.EQ }
+        })
+        let p = if (percentile < 0.0) { 0.0 } else if (percentile > 1.0) { 1.0 } else { percentile }
+        let idx = Int64(Float64(values.size - 1) * p + 0.5)
+        return Float64(values[idx]) / 1000000.0
     }
 }
 
@@ -149,7 +177,9 @@ class FlatScore <: Comparable<FlatScore> {
     public func compare(other: FlatScore): Ordering {
         if (this.score < other.score) { return Ordering.LT }
         if (this.score > other.score) { return Ordering.GT }
-        return Ordering.EQ
+        let idOrder = this.id.compare(other.id)
+        if (idOrder != Ordering.EQ) { return idOrder }
+        return this.key.compare(other.key)
     }
 }
 
@@ -159,6 +189,8 @@ public class BetaEvalStats {
     public let representative: MethodRecallStats
     public let pyflat: MethodRecallStats
     public let hdmgTrace: HdmgTraceStats
+    public var totalBuildNs: Int64
+    public var buildCount: Int64
 
     public init(beta: Float64) {
         this.beta = beta
@@ -166,6 +198,13 @@ public class BetaEvalStats {
         this.representative = MethodRecallStats("Representative")
         this.pyflat = MethodRecallStats("ExactSearch")
         this.hdmgTrace = HdmgTraceStats()
+        this.totalBuildNs = 0
+        this.buildCount = 0
+    }
+
+    public func avgBuildMs(): Float64 {
+        if (buildCount == 0) { return 0.0 }
+        return Float64(totalBuildNs) / 1000000.0 / Float64(buildCount)
     }
 }
 
@@ -221,8 +260,46 @@ func recallKeyAtK(results: Array<SearchResult>, trueKey: String, topK: Int64): F
     return 0.0
 }
 
+func binaryNdcgAtK(relevant: ArrayList<String>, ranked: ArrayList<String>, topK: Int64): Float64 {
+    if (topK <= 0 || relevant.isEmpty()) { return 0.0 }
+    let uniqueRelevant = ArrayList<String>()
+    for (item in relevant) {
+        if (!uniqueRelevant.contains(item)) { uniqueRelevant.add(item) }
+    }
+    let seen = ArrayList<String>()
+    let limit = if (topK < ranked.size) { topK } else { ranked.size }
+    var dcg = 0.0
+    for (i in 0..limit) {
+        let item = ranked[i]
+        if (uniqueRelevant.contains(item) && !seen.contains(item)) {
+            dcg += 1.0 / (log(Float64(i + 2)) / log(2.0))
+            seen.add(item)
+        }
+    }
+    let idealLimit = if (topK < uniqueRelevant.size) { topK } else { uniqueRelevant.size }
+    var idcg = 0.0
+    for (i in 0..idealLimit) {
+        idcg += 1.0 / (log(Float64(i + 2)) / log(2.0))
+    }
+    return if (idcg > 0.0) { dcg / idcg } else { 0.0 }
+}
+
+func keyNdcgAtK(results: Array<SearchResult>, trueKey: String, topK: Int64): Float64 {
+    let relevant = ArrayList<String>()
+    relevant.add(trueKey)
+    return binaryNdcgAtK(relevant, resultBaseKeys(results, topK), topK)
+}
+
+func sortedFolderNames(dataset: HashMap<String, FolderData>): ArrayList<String> {
+    let names = ArrayList<String>()
+    for ((folder, _) in dataset) { names.add(folder) }
+    sort(names, by: { a, b => a.compare(b) })
+    return names
+}
+
 func datasetDimension(dataset: HashMap<String, FolderData>): Int64 {
-    for ((_, data) in dataset) {
+    for (folder in sortedFolderNames(dataset)) {
+        let data = dataset[folder]
         if (!data.vectors.isEmpty()) {
             return Int64(data.vectors[0].size)
         }
@@ -266,7 +343,8 @@ func buildVectormapFromDataset(
     let vectormap = VectorMap()
     var totalVectors: Int64 = 0
     var dim: Int64 = 0
-    for ((folder, data) in dataset) {
+    for (folder in sortedFolderNames(dataset)) {
+        let data = dataset[folder]
         if (data.vectors.isEmpty()) { continue }
         if (!data.globalReps.contains(scale.repMethod)) { continue }
         let repVec = data.globalReps[scale.repMethod]
@@ -284,7 +362,8 @@ func buildVectormapFromDataset(
         totalVectors += Int64(vSize)
     }
     let keyVectors = HashMap<String, Array<Float64>>()
-    for ((_, data) in dataset) {
+    for (folder in sortedFolderNames(dataset)) {
+        let data = dataset[folder]
         if (data.globalReps.contains(scale.repMethod)) {
             keyVectors[data.key] = data.globalReps[scale.repMethod]
         }
@@ -371,7 +450,8 @@ public func runStorageEvaluation(
     println("\n=== [${datasetLabel}] VectorMap Storage Analysis ===")
     println("Total keys: ${totalKeys}")
     let keyList = ArrayList<String>()
-    for ((folder, data) in dataset) {
+    for (folder in sortedFolderNames(dataset)) {
+        let data = dataset[folder]
         if (!data.vectors.isEmpty()) {
             keyList.add(data.key)
         }
@@ -382,7 +462,8 @@ public func runStorageEvaluation(
     println("${padRight("Key", 15)} ${padRight("Group", 30)} ${padRight("Vectors", 8)} ${padRight("Dimension", 10)} ${padRight("Type", 10)}")
     println("-" * 80)
 
-    for ((folder, data) in dataset) {
+    for (folder in sortedFolderNames(dataset)) {
+        let data = dataset[folder]
         if (data.vectors.isEmpty()) { continue }
         if (!data.globalReps.contains(scale.repMethod)) { continue }
         let vCount = Int64(data.vectors.size)
@@ -408,9 +489,18 @@ class FoldSplit {
         let testVecs: ArrayList<Array<Float64>>,
         let trainDescs: ArrayList<Any>,
         let testDescs: ArrayList<Any>,
+        let trainRecordIds: ArrayList<Any>,
+        let testRecordIds: ArrayList<Any>,
         let trainRep: Array<Float64>,
         let testRep: Array<Float64>
     ) {}
+}
+
+func recordIndex(index: Int64): String {
+    let raw = index.toString()
+    var out = raw
+    for (_ in 0..(8 - raw.size)) { out = "0" + out }
+    return out
 }
 
 func buildFoldSplits(
@@ -420,7 +510,8 @@ func buildFoldSplits(
     repMethod: String
 ): ArrayList<FoldSplit> {
     let splits = ArrayList<FoldSplit>()
-    for ((folder, data) in dataset) {
+    for (folder in sortedFolderNames(dataset)) {
+        let data = dataset[folder]
         let nTotal = data.vectors.size
         if (nTotal == 0) { continue }
         if (!data.foldReps.contains(repMethod)) { continue }
@@ -435,17 +526,23 @@ func buildFoldSplits(
         let testVecs = ArrayList<Array<Float64>>()
         let trainDescs = ArrayList<Any>()
         let testDescs = ArrayList<Any>()
+        let trainRecordIds = ArrayList<Any>()
+        let testRecordIds = ArrayList<Any>()
         for (i in 0..nTotal) {
+            let stableId = "${folder}/${recordIndex(i)}"
             if (i >= startIdx && i < endIdx) {
                 testVecs.add(data.vectors[i])
                 testDescs.add(data.descriptions[i])
+                testRecordIds.add(stableId)
             } else {
                 trainVecs.add(data.vectors[i])
                 trainDescs.add(data.descriptions[i])
+                trainRecordIds.add(stableId)
             }
         }
         if (trainVecs.isEmpty() && testVecs.isEmpty()) { continue }
         splits.add(FoldSplit(folder, data.key, trainVecs, testVecs, trainDescs, testDescs,
+            trainRecordIds, testRecordIds,
             foldRep.trainRep, foldRep.testRep))
     }
     return splits
@@ -485,7 +582,8 @@ func buildVectormapForFold(splits: ArrayList<FoldSplit>, vType: String, repMetho
 func buildAlignedFoldState(
     splits: ArrayList<FoldSplit>,
     vType: String,
-    repMethod: String
+    repMethod: String,
+    config: AlignedBenchmarkConfig
 ): (VectorMap, HashMap<String, ArrayList<VectorGroup>>, ArrayList<FlatItem>) {
     let vectormap = VectorMap()
     let testGroups = HashMap<String, ArrayList<VectorGroup>>()
@@ -496,13 +594,13 @@ func buildAlignedFoldState(
         if (!sp.trainVecs.isEmpty()) {
             let trSize = sp.trainVecs.size
             let vecArr = Array<Array<Float64>>(trSize, { i => sp.trainVecs[i] })
-            let descArr = Array<Any>(trSize, { i => sp.trainDescs[i] })
+            let descArr = Array<Any>(trSize, { i => sp.trainRecordIds[i] })
             let sourceGroup = VectorGroup(sp.folder, sp.trainRep, repMethod, vecArr, descArr,
                 vectorType: vType, groupType: "")
-            vectormap.insertWithAutoCluster(sp.key, sourceGroup, metadataOpt: None, alpha: 0.5)
+            vectormap.insertWithAutoCluster(sp.key, sourceGroup, metadataOpt: None, alpha: config.clusterAlpha)
             keyVectors[sp.key] = sp.trainRep
             for (i in 0..trSize) {
-                let raw = sp.trainDescs[i]
+                let raw = sp.trainRecordIds[i]
                 let sOpt = raw as String
                 let id = if (sOpt.isSome()) { sOpt.getOrThrow() } else { "${sp.key}#train#${i}" }
                 flatItems.add(FlatItem(id, sp.key, sp.trainVecs[i]))
@@ -511,7 +609,7 @@ func buildAlignedFoldState(
         if (!sp.testVecs.isEmpty()) {
             let teSize = sp.testVecs.size
             let vecArr = Array<Array<Float64>>(teSize, { i => sp.testVecs[i] })
-            let descArr = Array<Any>(teSize, { i => sp.testDescs[i] })
+            let descArr = Array<Any>(teSize, { i => sp.testRecordIds[i] })
             let testGroup = VectorGroup(sp.folder + "_test", sp.testRep, repMethod, vecArr, descArr,
                 vectorType: vType, groupType: "")
             if (!testGroups.contains(sp.key)) {
@@ -521,7 +619,13 @@ func buildAlignedFoldState(
         }
     }
     vectormap.setKeyVectors(keyVectors)
-    vectormap.buildHdmg(embeddingK: 12, semanticIntraK: 20, semanticBridgeKeys: 2, semanticBridgePerKey: 1, useMutualEmbedding: false)
+    vectormap.buildHdmgWithConfig(HdmgBuildConfig(
+        embeddingK: config.embeddingK,
+        semanticIntraK: config.semanticIntraK,
+        semanticBridgeKeys: config.semanticBridgeKeys,
+        semanticBridgePerKey: config.semanticBridgePerKey,
+        useMutualEmbedding: config.useMutualEmbedding
+    ))
     return (vectormap, testGroups, flatItems)
 }
 
@@ -577,6 +681,28 @@ func searchResultIds(results: Array<SearchResult>, topK: Int64): ArrayList<Strin
         if (!id.isEmpty()) { ids.add(id) }
     }
     return ids
+}
+
+func parityResultTrace(results: Array<SearchResult>, topK: Int64): String {
+    var out = ""
+    let limit = if (topK < results.size) { topK } else { results.size }
+    for (i in 0..limit) {
+        if (i > 0) { out += ";" }
+        let result = results[i]
+        let id = resultId(result)
+        out += "${benchBaseKey(result.key)}::${id}"
+    }
+    return out
+}
+
+func parityFlatTrace(results: ArrayList<FlatScore>, topK: Int64): String {
+    var out = ""
+    let limit = if (topK < results.size) { topK } else { results.size }
+    for (i in 0..limit) {
+        if (i > 0) { out += ";" }
+        out += "${benchBaseKey(results[i].key)}::${results[i].id}"
+    }
+    return out
 }
 
 func recordHdmgTrace(vectormap: VectorMap, trace: HdmgTraceStats): Unit {
@@ -647,18 +773,17 @@ func evalModeSingleQuery(
     for (fold in 0..nFolds) {
         if (maxQueries > 0 && done >= maxQueries) { break }
         let splits = buildFoldSplits(dataset, fold, nFolds, repMethod)
-        let (vectormap, testGroups) = buildVectormapForFold(splits, vType, repMethod)
-        for ((key, groups) in testGroups) {
-            for (group in groups) {
-                for (vec in group.vectors) {
-                    if (maxQueries > 0 && done >= maxQueries) { break }
-                    let results = vectormap.search(vec, keyOpt: None, topK: topK, mode: mode,
-                        distanceMethod: "cosine", vectorType: None, groupType: None, groupName: None)
-                    stats.recalls.add(recallKeyAtK(results, key, topK))
-                    done++
-                    if (maxQueries > 0 && done % progressEvery == 0) {
-                        println("Under test: ${done}/${maxQueries} (${progressLabel})")
-                    }
+        let (vectormap, _) = buildVectormapForFold(splits, vType, repMethod)
+        for (sp in splits) {
+            for (vec in sp.testVecs) {
+                if (maxQueries > 0 && done >= maxQueries) { break }
+                let results = vectormap.search(vec, keyOpt: None, topK: topK, mode: mode,
+                    distanceMethod: "cosine", vectorType: None, groupType: None, groupName: None)
+                stats.recalls.add(recallKeyAtK(results, sp.key, topK))
+                stats.ndcgs.add(keyNdcgAtK(results, sp.key, topK))
+                done++
+                if (maxQueries > 0 && done % progressEvery == 0) {
+                    println("Under test: ${done}/${maxQueries} (${progressLabel})")
                 }
             }
         }
@@ -685,20 +810,19 @@ func evalModeGroupN(
     for (fold in 0..nFolds) {
         if (maxQueries > 0 && done >= maxQueries) { break }
         let splits = buildFoldSplits(dataset, fold, nFolds, repMethod)
-        let (vectormap, testGroups) = buildVectormapForFold(splits, vType, repMethod)
-        for ((key, groups) in testGroups) {
-            for (group in groups) {
-                if (maxQueries > 0 && done >= maxQueries) { break }
-                let qSize = group.vectors.size
-                let qVecs = Array<Array<Float64>>(qSize, { i => group.vectors[i] })
-                let results = vectormap.searchMulti(qVecs, keyOpt: None, topK: topK,
-                    groupNDistanceMethod: distMethod, distanceMethod: "cosine",
-                    vectorType: None, groupType: None, groupName: None)
-                stats.recalls.add(recallKeyAtK(results, key, topK))
-                done++
-                if (maxQueries > 0 && done % progressEvery == 0) {
-                    println("Under test: ${done}/${maxQueries} (${progressLabel})")
-                }
+        let (vectormap, _) = buildVectormapForFold(splits, vType, repMethod)
+        for (sp in splits) {
+            if (maxQueries > 0 && done >= maxQueries) { break }
+            if (sp.testVecs.isEmpty()) { continue }
+            let qVecs = sp.testVecs.toArray()
+            let results = vectormap.searchMulti(qVecs, keyOpt: None, topK: topK,
+                groupNDistanceMethod: distMethod, distanceMethod: "cosine",
+                vectorType: None, groupType: None, groupName: None)
+            stats.recalls.add(recallKeyAtK(results, sp.key, topK))
+            stats.ndcgs.add(keyNdcgAtK(results, sp.key, topK))
+            done++
+            if (maxQueries > 0 && done % progressEvery == 0) {
+                println("Under test: ${done}/${maxQueries} (${progressLabel})")
             }
         }
     }
@@ -745,6 +869,7 @@ func evalModeHdmg(
                     )
                     recordHdmgTrace(vectormap, trace)
                     stats.recalls.add(recallKeyAtK(results, sp.key, topK))
+                    stats.ndcgs.add(keyNdcgAtK(results, sp.key, topK))
                     done++
                     if (maxQueries > 0 && done % progressEvery == 0) {
                         println("Under test: ${done}/${maxQueries} (${progressLabel})")
@@ -762,28 +887,24 @@ func evalModeHdmg(
 func printRecallResultsTable(methodStats: ArrayList<MethodRecallStats>, topK: Int64): Unit {
     var totalQueries: Int64 = 0
     for (st in methodStats) {
-        if (Int64(st.recalls.size) > totalQueries) {
-            totalQueries = Int64(st.recalls.size)
-        }
+        if (Int64(st.recalls.size) > totalQueries) { totalQueries = Int64(st.recalls.size) }
     }
-    let successful = totalQueries
 
-    println("\n" + "=" * 80)
-    println("=== Recall Test results ===")
-    println("=" * 80)
+    println("\n" + "=" * 92)
+    println("=== Recall/NDCG Test results ===")
+    println("=" * 92)
     println("Total queries: ${totalQueries}")
-    println("Number of successful queries: ${successful}")
-    println("\n--- Recall Indicator header ---")
-    println("| ${padRight("Method", 22)} | ${padRight("Avg Recall@${topK}", 17)} | ${padRight("Min Recall", 10)} | ${padRight("Max Recall", 10)} |")
-    println("|-----------------------|-------------------|------------|-----------|")
+    println("Number of successful queries: ${totalQueries}")
+    println("| ${padRight("Method", 22)} | ${padRight("Avg Recall@${topK}", 17)} | ${padRight("NDCG@${topK}", 10)} | ${padRight("Min Recall", 10)} | ${padRight("Max Recall", 10)} |")
+    println("|-----------------------|-------------------|------------|------------|-----------|")
     for (st in methodStats) {
         if (st.recalls.isEmpty()) {
-            println("| ${padRight(st.label, 22)} | N/A               | N/A        | N/A        |")
-            continue
+            println("| ${padRight(st.label, 22)} | N/A               | N/A        | N/A        | N/A        |")
+        } else {
+            println("| ${padRight(st.label, 22)} | ${formatFloat4(st.avg())}         | ${formatFloat4(st.avgNdcg())}     | ${formatFloat4(st.minVal())}   | ${formatFloat4(st.maxVal())}   |")
         }
-        println("| ${padRight(st.label, 22)} | ${formatFloat4(st.avg())}         | ${formatFloat4(st.minVal())}   | ${formatFloat4(st.maxVal())}   |")
     }
-    println("=" * 80)
+    println("=" * 92)
 }
 
 func printHdmgTraceStats(trace: HdmgTraceStats): Unit {
@@ -880,16 +1001,27 @@ public func runSearchEvaluation(
 func evalAlignedBeta(
     dataset: HashMap<String, FolderData>,
     scale: EvalScale,
-    beta: Float64
+    beta: Float64,
+    config: AlignedBenchmarkConfig
 ): BetaEvalStats {
     let stats = BetaEvalStats(beta)
     let topK = if (scale.topK > 0) { scale.topK } else { defaultTopK }
+    let hdmgSearchConfig = HdmgSearchConfig(
+        maxSteps: config.maxSteps,
+        entryAlphaThreshold: config.entryAlphaThreshold,
+        clusterPoolMultiplier: config.clusterPoolMultiplier,
+        topKeyCandidates: config.topKeyCandidates,
+        extraHops: config.extraHops
+    )
     var done: Int64 = 0
     let useKeyRecall = beta > 0.999999
     for (fold in 0..scale.nFolds) {
         if (scale.maxQueries > 0 && done >= scale.maxQueries) { break }
         let splits = buildFoldSplits(dataset, fold, scale.nFolds, scale.repMethod)
-        let (vectormap, testGroups, flatItems) = buildAlignedFoldState(splits, scale.vectorType, scale.repMethod)
+        let buildStartNs = nowNs()
+        let (vectormap, testGroups, flatItems) = buildAlignedFoldState(splits, scale.vectorType, scale.repMethod, config)
+        stats.totalBuildNs += nowNs() - buildStartNs
+        stats.buildCount++
         for (sp in splits) {
             if (scale.maxQueries > 0 && done >= scale.maxQueries) { break }
             if (!testGroups.contains(sp.key)) { continue }
@@ -900,20 +1032,16 @@ func evalAlignedBeta(
                     let gt = flatMixedSearch(flatItems, vec, Some(sp.testRep), vectormap.keyVectors, beta, topK)
 
                     let mixedStartNs = nowNs()
-                    let mixedResults = vectormap.searchHdmg(
+                    let mixedResults = vectormap.searchHdmgWithConfig(
                         vec,
-                        queryKeyVector: Some(sp.testRep),
-                        alpha: beta,
-                        topK: topK,
-                        maxSteps: 100,
-                        distanceMethod: "cosine",
-                        entryAlphaThreshold: 0.3,
-                        clusterPoolSize: Some(topK * 3),
-                        topKeyCandidates: 5,
-                        extraHops: 0
+                        Some(sp.testRep),
+                        beta,
+                        topK,
+                        hdmgSearchConfig,
+                        distanceMethod: "cosine"
                     )
                     let mixedEndNs = nowNs()
-                    stats.mixed.totalLatencyNs += mixedEndNs - mixedStartNs
+                    stats.mixed.addLatency(mixedEndNs - mixedStartNs)
                     recordHdmgTrace(vectormap, stats.hdmgTrace)
 
                     let repStartNs = nowNs()
@@ -926,24 +1054,37 @@ func evalAlignedBeta(
                         distanceMethod: "cosine"
                     )
                     let repEndNs = nowNs()
-                    stats.representative.totalLatencyNs += repEndNs - repStartNs
+                    stats.representative.addLatency(repEndNs - repStartNs)
 
                     let pyflatStartNs = nowNs()
                     let pyflatResults = flatEmbeddingSearch(flatItems, vec, topK)
                     let pyflatEndNs = nowNs()
-                    stats.pyflat.totalLatencyNs += pyflatEndNs - pyflatStartNs
+                    stats.pyflat.addLatency(pyflatEndNs - pyflatStartNs)
 
                     if (useKeyRecall) {
                         let gtKeys = flatBaseKeys(gt, topK)
-                        stats.mixed.recalls.add(recallKeyHitRate(gtKeys, resultBaseKeys(mixedResults, topK), topK))
-                        stats.representative.recalls.add(recallKeyHitRate(gtKeys, resultBaseKeys(repResults, topK), topK))
-                        stats.pyflat.recalls.add(recallKeyHitRate(gtKeys, flatBaseKeys(pyflatResults, topK), topK))
+                        let mixedKeys = resultBaseKeys(mixedResults, topK)
+                        let repKeys = resultBaseKeys(repResults, topK)
+                        let flatKeys = flatBaseKeys(pyflatResults, topK)
+                        stats.mixed.recalls.add(recallKeyHitRate(gtKeys, mixedKeys, topK))
+                        stats.representative.recalls.add(recallKeyHitRate(gtKeys, repKeys, topK))
+                        stats.pyflat.recalls.add(recallKeyHitRate(gtKeys, flatKeys, topK))
+                        stats.mixed.ndcgs.add(binaryNdcgAtK(gtKeys, mixedKeys, topK))
+                        stats.representative.ndcgs.add(binaryNdcgAtK(gtKeys, repKeys, topK))
+                        stats.pyflat.ndcgs.add(binaryNdcgAtK(gtKeys, flatKeys, topK))
                     } else {
-                        stats.mixed.recalls.add(recallIdOverlap(gt, searchResultIds(mixedResults, topK)))
-                        stats.representative.recalls.add(recallIdOverlap(gt, searchResultIds(repResults, topK)))
+                        let gtIds = ArrayList<String>()
+                        for (r in gt) { gtIds.add(r.id) }
+                        let mixedIds = searchResultIds(mixedResults, topK)
+                        let repIds = searchResultIds(repResults, topK)
+                        stats.mixed.recalls.add(recallIdOverlap(gt, mixedIds))
+                        stats.representative.recalls.add(recallIdOverlap(gt, repIds))
                         let pyIds = ArrayList<String>()
                         for (r in pyflatResults) { pyIds.add(r.id) }
                         stats.pyflat.recalls.add(recallIdOverlap(gt, pyIds))
+                        stats.mixed.ndcgs.add(binaryNdcgAtK(gtIds, mixedIds, topK))
+                        stats.representative.ndcgs.add(binaryNdcgAtK(gtIds, repIds, topK))
+                        stats.pyflat.ndcgs.add(binaryNdcgAtK(gtIds, pyIds, topK))
                     }
 
                     done++
@@ -958,18 +1099,17 @@ func evalAlignedBeta(
 }
 
 func printAlignedBetaDetail(stats: BetaEvalStats, topK: Int64): Unit {
-    println("\n" + "=" * 80)
-    println("=== Recall Test results ===")
-    println("=" * 80)
+    println("\n" + "=" * 92)
+    println("=== Recall/NDCG Test results ===")
+    println("=" * 92)
     println("Total queries: ${stats.mixed.recalls.size}")
     println("Number of successful queries: ${stats.mixed.recalls.size}")
-    println("\n--- Recall Indicator header ---")
-    println("| ${padRight("Method", 22)} | ${padRight("Avg Recall@${topK}", 17)} | ${padRight("Min Recall", 10)} | ${padRight("Max Recall", 10)} |")
-    println("|-----------------------|-------------------|------------|-----------|")
-    println("| ${padRight("Mixed (beta=${formatBeta(stats.beta)}, HDMG)", 22)} | ${formatFloat4(stats.mixed.avg())}         | ${formatFloat4(stats.mixed.minVal())}   | ${formatFloat4(stats.mixed.maxVal())}   |")
-    println("| ${padRight("Representative", 22)} | ${formatFloat4(stats.representative.avg())}         | ${formatFloat4(stats.representative.minVal())}   | ${formatFloat4(stats.representative.maxVal())}   |")
-    println("| ${padRight("ExactSearch", 22)} | ${formatFloat4(stats.pyflat.avg())}         | ${formatFloat4(stats.pyflat.minVal())}   | ${formatFloat4(stats.pyflat.maxVal())}   |")
-    println("=" * 80)
+    println("| ${padRight("Method", 22)} | ${padRight("Avg Recall@${topK}", 17)} | ${padRight("NDCG@${topK}", 10)} | ${padRight("Min Recall", 10)} | ${padRight("Max Recall", 10)} |")
+    println("|-----------------------|-------------------|------------|------------|-----------|")
+    println("| ${padRight("Mixed (beta=${formatBeta(stats.beta)}, HDMG)", 22)} | ${formatFloat4(stats.mixed.avg())}         | ${formatFloat4(stats.mixed.avgNdcg())}     | ${formatFloat4(stats.mixed.minVal())}   | ${formatFloat4(stats.mixed.maxVal())}   |")
+    println("| ${padRight("Representative", 22)} | ${formatFloat4(stats.representative.avg())}         | ${formatFloat4(stats.representative.avgNdcg())}     | ${formatFloat4(stats.representative.minVal())}   | ${formatFloat4(stats.representative.maxVal())}   |")
+    println("| ${padRight("ExactSearch", 22)} | ${formatFloat4(stats.pyflat.avg())}         | ${formatFloat4(stats.pyflat.avgNdcg())}     | ${formatFloat4(stats.pyflat.minVal())}   | ${formatFloat4(stats.pyflat.maxVal())}   |")
+    println("=" * 92)
     printHdmgTraceStats(stats.hdmgTrace)
 }
 
@@ -992,6 +1132,18 @@ func printAlignedSummary(results: ArrayList<BetaEvalStats>, topK: Int64): Unit {
     }
     println("=" * 140)
 
+    println("\n=== latency percentiles (ms/query) ===")
+    println("${padRight("beta", 6)} | ${padRight("hdmg_p50", 10)} ${padRight("hdmg_p95", 10)} | ${padRight("rep_p50", 10)} ${padRight("rep_p95", 10)} | ${padRight("flat_p50", 10)} ${padRight("flat_p95", 10)}")
+    println("-" * 86)
+    for (r in results) {
+        println("${padRight(formatBeta(r.beta), 6)} | ${padRight(formatMs(r.mixed.percentileLatencyMs(0.50)), 10)} ${padRight(formatMs(r.mixed.percentileLatencyMs(0.95)), 10)} | ${padRight(formatMs(r.representative.percentileLatencyMs(0.50)), 10)} ${padRight(formatMs(r.representative.percentileLatencyMs(0.95)), 10)} | ${padRight(formatMs(r.pyflat.percentileLatencyMs(0.50)), 10)} ${padRight(formatMs(r.pyflat.percentileLatencyMs(0.95)), 10)}")
+    }
+
+    println("\n=== index build latency (ms/fold) ===")
+    for (r in results) {
+        println("beta=${formatBeta(r.beta)} build_pseudo_mean=${formatMs(r.avgBuildMs())} folds=${r.buildCount}")
+    }
+
     println("\n" + "=" * 120)
     println("=== HDMG ( beta) ===")
     println("=" * 120)
@@ -1003,19 +1155,59 @@ func printAlignedSummary(results: ArrayList<BetaEvalStats>, topK: Int64): Unit {
     println("=" * 120)
 }
 
+func methodStatsJson(stats: MethodRecallStats): String {
+    return "{\"recallAtK\":${formatFloat4(stats.avg())},\"ndcgAtK\":${formatFloat4(stats.avgNdcg())}," +
+        "\"latencyMs\":{\"mean\":${formatMs(stats.avgLatencyMs())}," +
+        "\"p50\":${formatMs(stats.percentileLatencyMs(0.50))},\"p95\":${formatMs(stats.percentileLatencyMs(0.95))}}}"
+}
+
+func alignedResultJson(
+    datasetLabel: String,
+    scale: EvalScale,
+    config: AlignedBenchmarkConfig,
+    results: ArrayList<BetaEvalStats>
+): String {
+    var rows = "["
+    for (i in 0..results.size) {
+        if (i > 0) { rows += "," }
+        let r = results[i]
+        rows += "{\"beta\":${formatBeta(r.beta)},\"queryCount\":${r.mixed.recalls.size}," +
+            "\"build\":{\"folds\":${r.buildCount},\"meanMs\":${formatMs(r.avgBuildMs())}}," +
+            "\"mixed\":${methodStatsJson(r.mixed)}," +
+            "\"representative\":${methodStatsJson(r.representative)}," +
+            "\"exactSearch\":${methodStatsJson(r.pyflat)}," +
+            "\"hdmgTrace\":{\"avgHops\":${formatFloat4(r.hdmgTrace.avgHops())}," +
+            "\"avgDepth\":${formatFloat4(r.hdmgTrace.avgDepth())}," +
+            "\"avgCandidatePool\":${formatFloat4(r.hdmgTrace.avgCandidatePool())}," +
+            "\"avgMixedScoreCalls\":${formatFloat4(r.hdmgTrace.avgMixedScoreCalls())}}}"
+    }
+    rows += "]"
+    return "{\"schemaVersion\":1,\"backend\":\"cangjie-native\",\"dataset\":\"${datasetLabel}\"," +
+        "\"scale\":{\"folds\":${scale.nFolds},\"maxFolders\":${scale.maxFolders}," +
+        "\"maxQueries\":${scale.maxQueries},\"maxVectorsPerFolder\":${scale.maxVectorsPerFolder}," +
+        "\"topK\":${scale.topK},\"vectorType\":\"${scale.vectorType}\",\"repMethod\":\"${scale.repMethod}\"}," +
+        "\"config\":{\"clusterAlpha\":${formatBeta(config.clusterAlpha)},\"embeddingK\":${config.embeddingK}," +
+        "\"semanticIntraK\":${config.semanticIntraK},\"semanticBridgeKeys\":${config.semanticBridgeKeys}," +
+        "\"semanticBridgePerKey\":${config.semanticBridgePerKey},\"useMutualEmbedding\":${config.useMutualEmbedding}," +
+        "\"clusterPoolMultiplier\":${config.clusterPoolMultiplier},\"maxSteps\":${config.maxSteps}," +
+        "\"entryAlphaThreshold\":${formatBeta(config.entryAlphaThreshold)}," +
+        "\"topKeyCandidates\":${config.topKeyCandidates},\"extraHops\":${config.extraHops}},\"results\":${rows}}"
+}
+
 public func runAlignedBenchmarkEvaluation(
     dataset: HashMap<String, FolderData>,
     scale: EvalScale,
     datasetLabel: String
 ): Unit {
     let topK = if (scale.topK > 0) { scale.topK } else { defaultTopK }
-    let betaValues = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    let config = AlignedBenchmarkConfig()
+    let betaValues = config.betaValues
 
     println("\n" + "=" * 80)
     println("=== [${datasetLabel}] Multiple sets of parameters Recall test ===")
     println("Testing ${betaValues.size} parameter combinations")
-    println("alpha: 0.5")
-    println("hdmg_cluster_pool_size: ${topK * 3}")
+    println("alpha: ${formatBeta(config.clusterAlpha)}")
+    println("hdmg_cluster_pool_size: ${topK * config.clusterPoolMultiplier}")
     println("=" * 80)
 
     let resultsSummary = ArrayList<BetaEvalStats>()
@@ -1030,11 +1222,65 @@ public func runAlignedBenchmarkEvaluation(
         println("Representative: representative rerank top ${topK}")
         println("ExactSearch: full-scan single-vector cosine search top ${topK}")
         println("=" * 80)
-        let st = evalAlignedBeta(dataset, scale, beta)
+        let st = evalAlignedBeta(dataset, scale, beta, config)
         printAlignedBetaDetail(st, topK)
         resultsSummary.add(st)
     }
     printAlignedSummary(resultsSummary, topK)
+    println("RESULT_JSON|${alignedResultJson(datasetLabel, scale, config, resultsSummary)}")
+}
+
+// 在真实 precomputed 样例上输出逐 query 的机器可读结果，供冻结 Python 参考实现逐项比较。
+public func runParityTrace(
+    txtPath: String,
+    datasetId: String,
+    vectorType: String,
+    maxQueries: Int64,
+    beta: Float64
+): Unit {
+    if (maxQueries <= 0) { throw IllegalArgumentException("parity maxQueries 必须大于 0") }
+    let topK: Int64 = 3
+    let config = AlignedBenchmarkConfig()
+    let hdmgSearchConfig = HdmgSearchConfig(
+        maxSteps: config.maxSteps, entryAlphaThreshold: config.entryAlphaThreshold,
+        clusterPoolMultiplier: config.clusterPoolMultiplier,
+        topKeyCandidates: config.topKeyCandidates, extraHops: config.extraHops
+    )
+    let dataset = loadPrecomputedDataset(txtPath, 20)
+    let splits = buildFoldSplits(dataset, 0, 5, "simple")
+    let (vectormap, testGroups, flatItems) = buildAlignedFoldState(splits, vectorType, "simple", config)
+    var done: Int64 = 0
+    for (sp in splits) {
+        if (done >= maxQueries) { break }
+        if (!testGroups.contains(sp.key)) { continue }
+        for (group in testGroups[sp.key]) {
+            for (queryIndex in 0..group.vectors.size) {
+                if (done >= maxQueries) { break }
+                let query = group.vectors[queryIndex]
+                let queryRaw = group.descriptions[queryIndex]["text"] as String
+                let queryDescription = if (queryRaw.isSome()) { queryRaw.getOrThrow() } else { "${queryIndex}" }
+                let queryId = "${datasetId}/fold-0/${queryDescription}"
+                let exact = flatEmbeddingSearch(flatItems, query, topK)
+                let representative = vectormap.searchWithRepresentativeRerank(
+                    query, queryKeyVector: Some(sp.testRep), beta: beta, topK: topK,
+                    numGroups: Some(topK), distanceMethod: "cosine"
+                )
+                let mixed = vectormap.searchWithMixedKeyRepVec(
+                    query, queryKeyVector: Some(sp.testRep), beta: beta, topK: topK,
+                    groupExpansionFactor: config.clusterPoolMultiplier, distanceMethod: "cosine"
+                )
+                let hdmg = vectormap.searchHdmgWithConfig(
+                    query, Some(sp.testRep), beta, topK, hdmgSearchConfig, distanceMethod: "cosine"
+                )
+                println("PARITY|${queryId}|exact|${parityFlatTrace(exact, topK)}")
+                println("PARITY|${queryId}|representative|${parityResultTrace(representative, topK)}")
+                println("PARITY|${queryId}|mixed|${parityResultTrace(mixed, topK)}")
+                println("PARITY|${queryId}|hdmg|${parityResultTrace(hdmg, topK)}")
+                done++
+            }
+        }
+    }
+    println("PARITY_SUMMARY|${datasetId}|queries=${done}|beta=${formatBeta(beta)}|topK=${topK}")
 }
 
 public func runFullBenchmark(
