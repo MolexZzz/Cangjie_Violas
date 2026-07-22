@@ -23,7 +23,7 @@
 为避免两人同时修改同一大文件，7 月 21 日已形成以下公共基础：
 
 1. 冻结 [`reproduction-contract.md`](reproduction-contract.md) 中的 record、query、hit 和 Result JSON；
-2. 以稳定 recordId、五折、Recall/NDCG 和 Result JSON 作为公共实验契约；
+2. 以稳定 recordId、明确命名的 split（Python 90/10 或 five-fold）、Recall/NDCG 和 Result JSON 作为公共实验契约；
 3. 新增 `storage/clustering.cj`、`storage/mixed_scoring.cj` 和 `storage/hdmg.cj` 模块边界；
 4. 新增非交互 benchmark、artifact/manifest、Faiss 和外部数据库工具；
 5. 完成仓颉构建、核心回归和 Mock 数据库端到端验证。
@@ -143,7 +143,7 @@ B 独立完成这三个数据集的：
 - HDMG 与 Python 的差异有逐 query/逐阶段 trace；
 - 非交互 runner 和指标可由 Fake/Exact backend 独立验证；
 - 至少一项 HDMG 正确性修复和一项性能优化有测试；
-- 三个数据库先在同一 smoke artifact 上完成端到端实验；正式结论使用 full 数据和五折；
+- 三个数据库先在同一 smoke artifact 上完成端到端实验；正式复现使用 full 数据和 Python 90/10，五折单独汇报；
 - `git diff -- violas_python` 为空。
 
 ## 5. LOC 与 Faiss 的共同结论、分别取证

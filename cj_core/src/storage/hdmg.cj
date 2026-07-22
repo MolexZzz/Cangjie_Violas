@@ -21,10 +21,11 @@ public class HdmgBuildConfig {
     public let semanticBridgeKeys: Int64
     public let semanticBridgePerKey: Int64
     public let useMutualEmbedding: Bool
+    public let assumeNormalized: Bool
 
     public init(embeddingK!: Int64 = 16, semanticIntraK!: Int64 = 4,
         semanticBridgeKeys!: Int64 = 2, semanticBridgePerKey!: Int64 = 1,
-        useMutualEmbedding!: Bool = true) {
+        useMutualEmbedding!: Bool = true, assumeNormalized!: Bool = false) {
         if (embeddingK < 0 || semanticIntraK < 0 || semanticBridgeKeys < 0 || semanticBridgePerKey < 0) {
             throw IllegalArgumentException("HDMG 邻居参数不能为负数")
         }
@@ -33,6 +34,7 @@ public class HdmgBuildConfig {
         this.semanticBridgeKeys = semanticBridgeKeys
         this.semanticBridgePerKey = semanticBridgePerKey
         this.useMutualEmbedding = useMutualEmbedding
+        this.assumeNormalized = assumeNormalized
     }
 }
 

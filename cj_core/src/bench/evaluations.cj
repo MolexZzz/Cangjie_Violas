@@ -196,7 +196,9 @@ public class BetaEvalStats {
         this.beta = beta
         this.mixed = MethodRecallStats("Mixed")
         this.representative = MethodRecallStats("Representative")
-        this.pyflat = MethodRecallStats("ExactSearch")
+        // Keep the benchmark-facing name identical to the Python paper runner.
+        // The Cangjie implementation is still a full-scan cosine search.
+        this.pyflat = MethodRecallStats("PythonFlat")
         this.hdmgTrace = HdmgTraceStats()
         this.totalBuildNs = 0
         this.buildCount = 0
@@ -635,11 +637,14 @@ func flatMixedSearch(
     queryKeyVector: Option<Array<Float64>>,
     keyVectors: HashMap<String, Array<Float64>>,
     beta: Float64,
-    topK: Int64
+    topK: Int64,
+    assumeNormalized!: Bool = false
 ): ArrayList<FlatScore> {
     let scores = ArrayList<FlatScore>()
     for (item in flatItems) {
-        let embD = cosineDistance(queryVector, item.vector)
+        let embD = if (assumeNormalized) {
+            cosineDistanceNormalized(queryVector, item.vector)
+        } else { cosineDistance(queryVector, item.vector) }
         var score = embD
         if (beta != 0.0 && queryKeyVector.isSome()) {
             let base = benchBaseKey(item.key)
@@ -650,7 +655,9 @@ func flatMixedSearch(
                 kvOpt = Some(keyVectors[item.key])
             }
             if (kvOpt.isSome()) {
-                let semD = cosineDistance(queryKeyVector.getOrThrow(), kvOpt.getOrThrow())
+                let semD = if (assumeNormalized) {
+                    cosineDistanceNormalized(queryKeyVector.getOrThrow(), kvOpt.getOrThrow())
+                } else { cosineDistance(queryKeyVector.getOrThrow(), kvOpt.getOrThrow()) }
                 score = beta * semD + (1.0 - beta) * embD
             } else {
                 score = (1.0 - beta) * embD
@@ -668,9 +675,11 @@ func flatMixedSearch(
 func flatEmbeddingSearch(
     flatItems: ArrayList<FlatItem>,
     queryVector: Array<Float64>,
-    topK: Int64
+    topK: Int64,
+    assumeNormalized!: Bool = false
 ): ArrayList<FlatScore> {
-    return flatMixedSearch(flatItems, queryVector, None, HashMap<String, Array<Float64>>(), 0.0, topK)
+    return flatMixedSearch(flatItems, queryVector, None, HashMap<String, Array<Float64>>(), 0.0, topK,
+                           assumeNormalized: assumeNormalized)
 }
 
 func searchResultIds(results: Array<SearchResult>, topK: Int64): ArrayList<String> {
@@ -1108,7 +1117,7 @@ func printAlignedBetaDetail(stats: BetaEvalStats, topK: Int64): Unit {
     println("|-----------------------|-------------------|------------|------------|-----------|")
     println("| ${padRight("Mixed (beta=${formatBeta(stats.beta)}, HDMG)", 22)} | ${formatFloat4(stats.mixed.avg())}         | ${formatFloat4(stats.mixed.avgNdcg())}     | ${formatFloat4(stats.mixed.minVal())}   | ${formatFloat4(stats.mixed.maxVal())}   |")
     println("| ${padRight("Representative", 22)} | ${formatFloat4(stats.representative.avg())}         | ${formatFloat4(stats.representative.avgNdcg())}     | ${formatFloat4(stats.representative.minVal())}   | ${formatFloat4(stats.representative.maxVal())}   |")
-    println("| ${padRight("ExactSearch", 22)} | ${formatFloat4(stats.pyflat.avg())}         | ${formatFloat4(stats.pyflat.avgNdcg())}     | ${formatFloat4(stats.pyflat.minVal())}   | ${formatFloat4(stats.pyflat.maxVal())}   |")
+    println("| ${padRight("PythonFlat", 22)} | ${formatFloat4(stats.pyflat.avg())}         | ${formatFloat4(stats.pyflat.avgNdcg())}     | ${formatFloat4(stats.pyflat.minVal())}   | ${formatFloat4(stats.pyflat.maxVal())}   |")
     println("=" * 92)
     printHdmgTraceStats(stats.hdmgTrace)
 }
@@ -1220,7 +1229,7 @@ public func runAlignedBenchmarkEvaluation(
         println("Ground Truth: brute-force mixed (beta=${formatBeta(beta)}) Search top ${topK}")
         println("Mixed (beta=${formatBeta(beta)}, HDMG): Mixed key+rep vector search top ${topK}")
         println("Representative: representative rerank top ${topK}")
-        println("ExactSearch: full-scan single-vector cosine search top ${topK}")
+        println("PythonFlat: Flat + Cosine Search top ${topK}")
         println("=" * 80)
         let st = evalAlignedBeta(dataset, scale, beta, config)
         printAlignedBetaDetail(st, topK)
@@ -1302,7 +1311,7 @@ public func runFullBenchmark(
     println("HDMG: embedding_k=12, semantic_intra_k=20, bridge_keys=2, bridge_per_key=1, cluster_pool_size=${topK * 3}, extra_hops=0")
     println("PYTHON_FLAT_MODE=naive")
     println("NFOLDS=${scale.nFolds}, REP_METHOD=${scale.repMethod}, VECTOR_TYPE=${scale.vectorType}")
-    println("ExactSearch=full-scan single-vector cosine search over all training vectors")
+    println("PythonFlat=full-scan single-vector cosine search over all training vectors")
     if (scale.maxQueries > 0) {
         println("MAX_QUERIES=${scale.maxQueries} (per retrieval mode)")
     } else {

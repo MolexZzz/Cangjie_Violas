@@ -11,11 +11,13 @@ import subprocess
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
+from importlib import metadata
 from pathlib import Path
 
 import numpy as np
 
 from precomputed_artifacts import DATASET_FILES, Folder, load_file
+from paper_artifact import load_artifact
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,6 +80,7 @@ class QdrantBackend(ExternalVectorBackend):
         self.models = models
         self.client = QdrantClient(url=url)
         self.url = url
+        self.server_version = str(self.client.info().version)
         self.collection = ""
         self.id_map: dict[int, str] = {}
 
@@ -107,7 +110,8 @@ class QdrantBackend(ExternalVectorBackend):
 
     @property
     def config(self) -> dict:
-        return {"backend": self.name, "url": self.url, "metric": "cosine", "index": "engine-default HNSW"}
+        return {"backend": self.name, "url": self.url, "serverVersion": self.server_version,
+                "metric": "cosine", "index": "engine-default HNSW"}
 
 
 class MilvusBackend(ExternalVectorBackend):
@@ -121,6 +125,7 @@ class MilvusBackend(ExternalVectorBackend):
         self.DataType = DataType
         self.client = MilvusClient(uri=uri, token=token)
         self.uri = uri
+        self.server_version = self.client.get_server_version()
         self.collection = ""
 
     def reset(self, collection: str, dimension: int) -> None:
@@ -132,7 +137,10 @@ class MilvusBackend(ExternalVectorBackend):
         schema.add_field("recordId", datatype=self.DataType.VARCHAR, max_length=512)
         schema.add_field("vector", datatype=self.DataType.FLOAT_VECTOR, dim=dimension)
         index_params = self.client.prepare_index_params()
-        index_params.add_index(field_name="vector", index_type="HNSW", metric_type="COSINE", params={"M": 16, "efConstruction": 80})
+        # Match the Python image benchmark's Milvus configuration.
+        index_params.add_index(
+            field_name="vector", index_type="IVF_FLAT", metric_type="COSINE", params={"nlist": 1024}
+        )
         self.client.create_collection(collection_name=collection, schema=schema, index_params=index_params)
 
     def upsert(self, records: list[dict]) -> None:
@@ -149,13 +157,14 @@ class MilvusBackend(ExternalVectorBackend):
             data=[vector],
             limit=limit,
             output_fields=["recordId"],
-            search_params={"metric_type": "COSINE", "params": {"ef": max(64, limit)}},
+            search_params={"metric_type": "COSINE", "params": {"nprobe": 10}},
         )[0]
         return [(row["entity"]["recordId"], float(row["distance"])) for row in rows]
 
     @property
     def config(self) -> dict:
-        return {"backend": self.name, "uri": self.uri, "metric": "cosine", "index": "HNSW", "M": 16, "efConstruction": 80}
+        return {"backend": self.name, "uri": self.uri, "serverVersion": self.server_version,
+                "metric": "cosine", "index": "IVF_FLAT", "nlist": 1024, "nprobe": 10}
 
 
 class ChromaBackend(ExternalVectorBackend):
@@ -169,6 +178,7 @@ class ChromaBackend(ExternalVectorBackend):
         self.client = chromadb.HttpClient(host=host, port=port)
         self.host = host
         self.port = port
+        self.server_version = self.client.get_version()
         self.collection = None
 
     def reset(self, collection: str, dimension: int) -> None:
@@ -193,7 +203,8 @@ class ChromaBackend(ExternalVectorBackend):
 
     @property
     def config(self) -> dict:
-        return {"backend": self.name, "host": self.host, "port": self.port, "metric": "cosine", "index": "engine-default HNSW"}
+        return {"backend": self.name, "host": self.host, "port": self.port,
+                "serverVersion": self.server_version, "metric": "cosine", "index": "engine-default HNSW"}
 
 
 def normalize(vector: list[float]) -> list[float]:
@@ -251,6 +262,26 @@ def ndcg(expected: list[str], actual: list[str], top_k: int) -> float:
     return dcg / ideal if ideal else 0.0
 
 
+def key_hit_rate(expected: list[str], actual: list[str], by_id: dict[str, dict], top_k: int) -> float:
+    relevant = {by_id[item_id]["key"] for item_id in expected[:top_k]}
+    ranked = [by_id[item_id]["key"] for item_id in actual[:top_k]]
+    return sum(1 for key in ranked if key in relevant) / float(top_k)
+
+
+def key_ndcg(expected: list[str], actual: list[str], by_id: dict[str, dict], top_k: int) -> float:
+    relevant = {by_id[item_id]["key"] for item_id in expected[:top_k]}
+    ranked = [by_id[item_id]["key"] for item_id in actual[:top_k]]
+    seen: set[str] = set()
+    dcg = 0.0
+    for rank, key in enumerate(ranked):
+        if key in relevant and key not in seen:
+            dcg += 1.0 / math.log2(rank + 2)
+            seen.add(key)
+    ideal_count = min(top_k, len(relevant))
+    ideal = sum(1.0 / math.log2(rank + 2) for rank in range(ideal_count))
+    return dcg / ideal if ideal else 0.0
+
+
 def make_backend(args: argparse.Namespace) -> ExternalVectorBackend:
     if args.backend == "mock": return MockExactBackend()
     if args.backend == "qdrant": return QdrantBackend(args.qdrant_url)
@@ -264,14 +295,36 @@ def git_commit() -> str | None:
     return completed.stdout.strip() if completed.returncode == 0 else None
 
 
+def parse_betas(raw: str) -> list[float]:
+    values = [float(value) for value in raw.split(",")]
+    if not values or any(value < 0.0 or value > 1.0 for value in values):
+        raise argparse.ArgumentTypeError("betas must be a comma-separated list in [0,1]")
+    return values
+
+
+def show_progress(label: str, completed: int, total: int, width: int = 30) -> None:
+    """Dependency-free tqdm-style progress for terminal and persisted transcripts."""
+    ratio = completed / total if total else 1.0
+    filled = min(width, int(ratio * width))
+    bar = "#" * filled + "-" * (width - filled)
+    print(f"\r{label:<22} [{bar}] {completed:>4}/{total:<4} {ratio * 100:6.2f}%", end="", flush=True)
+    if completed >= total:
+        print(flush=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--backend", choices=("mock", "milvus", "qdrant", "chroma"), required=True)
-    parser.add_argument("--dataset", choices=tuple(DATASET_IDS), required=True)
+    parser.add_argument("--dataset", choices=tuple(DATASET_IDS))
+    parser.add_argument("--artifact", type=Path, help="python-paper-90-10 artifact directory; disables local splitting")
     parser.add_argument("--scale", choices=("smoke", "partial", "full"), default="smoke")
     parser.add_argument("--top-k", type=int, default=3)
     parser.add_argument("--beta", type=float, default=0.3)
-    parser.add_argument("--candidate-multiplier", type=int, default=80)
+    parser.add_argument("--betas", type=parse_betas,
+                        help="run several mixed weights after one database build, for example 0.0,0.1,...,1.0")
+    parser.add_argument("--candidate-multiplier", type=int, default=10)
+    parser.add_argument("--max-queries", type=int,
+                        help="override the scale query limit; useful for matching Cangjie smoke runs")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--qdrant-url", default=os.getenv("QDRANT_URL", "http://127.0.0.1:6333"))
     parser.add_argument("--milvus-uri", default=os.getenv("MILVUS_URI", "http://127.0.0.1:19530"))
@@ -279,14 +332,40 @@ def main() -> int:
     parser.add_argument("--chroma-host", default=os.getenv("CHROMA_HOST", "127.0.0.1"))
     parser.add_argument("--chroma-port", type=int, default=int(os.getenv("CHROMA_PORT", "8000")))
     args = parser.parse_args()
-    if args.top_k <= 0 or args.candidate_multiplier < 1 or not 0.0 <= args.beta <= 1.0:
+    betas = args.betas or [args.beta]
+    if (args.top_k <= 0 or args.candidate_multiplier < 1
+            or (args.max_queries is not None and args.max_queries <= 0)
+            or any(not 0.0 <= beta <= 1.0 for beta in betas)):
         parser.error("invalid top-k, candidate multiplier or beta")
+    if not args.artifact and not args.dataset:
+        parser.error("--dataset is required unless --artifact is supplied")
 
     limits = {"smoke": (20, 20), "partial": (120, 200), "full": (0, 0)}
     max_per_folder, max_queries = limits[args.scale]
-    dataset_name = DATASET_IDS[args.dataset]
-    folders = load_file(ROOT / "dataset" / "precomputed" / DATASET_FILES[dataset_name])
-    records, queries, key_vectors = prepare_fold(folders, max_per_folder, max_queries)
+    artifact_ground_truth = None
+    if args.artifact:
+        artifact_manifest, records, queries, key_vectors, artifact_ground_truth = load_artifact(args.artifact)
+        if args.top_k > artifact_manifest["topK"]:
+            parser.error(f"artifact only contains ground truth through topK={artifact_manifest['topK']}")
+        dataset_name = artifact_manifest["dataset"]
+        records = [{**row, "vector": normalize(row["vector"])} for row in records]
+        queries = [{**row, "vector": normalize(row["vector"]), "keyVector": normalize(row["keyVector"])} for row in queries]
+        key_vectors = {key: normalize(vector) for key, vector in key_vectors.items()}
+        query_limit = args.max_queries if args.max_queries is not None else max_queries
+        if query_limit:
+            queries = queries[:query_limit]
+        split_config = {"splitProtocol": artifact_manifest["protocol"],
+                        "artifactStatus": artifact_manifest["artifactStatus"],
+                        "artifact": str(args.artifact)}
+        scale_protocol = {"protocol": artifact_manifest["protocol"]}
+    else:
+        dataset_name = DATASET_IDS[args.dataset]
+        folders = load_file(ROOT / "dataset" / "precomputed" / DATASET_FILES[dataset_name])
+        query_limit = args.max_queries if args.max_queries is not None else max_queries
+        records, queries, key_vectors = prepare_fold(folders, max_per_folder, query_limit)
+        split_config = {"splitProtocol": "precomputed-five-fold", "fold": 0,
+                        "keyVectorSource": "fold-train-representative"}
+        scale_protocol = {"protocol": "precomputed-five-fold", "fold": 0}
     backend = make_backend(args)
     collection = f"violas_{dataset_name}_{args.scale}".lower().replace("-", "_")
     build_start = time.perf_counter_ns()
@@ -294,50 +373,127 @@ def main() -> int:
     backend.upsert(records)
     build_ms = (time.perf_counter_ns() - build_start) / 1_000_000.0
 
-    raw_recalls, raw_ndcgs, mixed_recalls, mixed_ndcgs, db_ms, rerank_ms = [], [], [], [], [], []
+    beta_stats = {
+        beta: {
+            "rawRecalls": [], "rawNdcgs": [], "rawDbMs": [],
+            "mixedRecalls": [], "mixedNdcgs": [], "candidateDbMs": [], "rerankMs": [],
+        }
+        for beta in betas
+    }
     candidate_limit = min(len(records), args.top_k * args.candidate_multiplier)
     by_id = {record["recordId"]: record for record in records}
+    progress_total = len(queries) * len(betas)
+    progress_completed = 0
+    show_progress(f"{backend.name}/{dataset_name}", 0, progress_total)
     for query in queries:
-        exact_embedding = exact_rank(records, query, key_vectors, 0.0)
-        exact_mixed = exact_rank(records, query, key_vectors, args.beta)
-        search_start = time.perf_counter_ns()
-        hits = backend.search(query["vector"], candidate_limit)
-        db_ms.append((time.perf_counter_ns() - search_start) / 1_000_000.0)
-        raw_ids = [item_id for item_id, _ in hits]
-        raw_recalls.append(overlap(exact_embedding, raw_ids, args.top_k))
-        raw_ndcgs.append(ndcg(exact_embedding, raw_ids, args.top_k))
-        rerank_start = time.perf_counter_ns()
-        rescored = []
-        for item_id in raw_ids:
-            record = by_id[item_id]
-            emb = cosine_distance(query["vector"], record["vector"])
-            sem = cosine_distance(query["keyVector"], key_vectors[record["key"]])
-            rescored.append((args.beta * sem + (1.0 - args.beta) * emb, item_id))
-        rescored.sort(key=lambda row: (row[0], row[1]))
-        mixed_ids = [item_id for _, item_id in rescored]
-        rerank_ms.append((time.perf_counter_ns() - rerank_start) / 1_000_000.0)
-        mixed_recalls.append(overlap(exact_mixed, mixed_ids, args.top_k))
-        mixed_ndcgs.append(ndcg(exact_mixed, mixed_ids, args.top_k))
+        for beta in betas:
+            if artifact_ground_truth is None:
+                exact_mixed = exact_rank(records, query, key_vectors, beta)
+            else:
+                try:
+                    exact_mixed = artifact_ground_truth[(query["queryId"], float(beta))]
+                except KeyError as error:
+                    raise ValueError(f"artifact does not contain requested query/beta ground truth: {error}") from error
+
+            # Match caltech_bench.py: both the raw Top-K call and the expanded
+            # candidate call are executed and timed independently for every beta.
+            raw_start = time.perf_counter_ns()
+            raw_hits = backend.search(query["vector"], args.top_k)
+            beta_stats[beta]["rawDbMs"].append((time.perf_counter_ns() - raw_start) / 1_000_000.0)
+            raw_ids = [item_id for item_id, _ in raw_hits]
+
+            search_start = time.perf_counter_ns()
+            hits = backend.search(query["vector"], candidate_limit)
+            beta_stats[beta]["candidateDbMs"].append(
+                (time.perf_counter_ns() - search_start) / 1_000_000.0
+            )
+            candidate_ids = [item_id for item_id, _ in hits]
+            rerank_start = time.perf_counter_ns()
+            rescored = []
+            for item_id in candidate_ids:
+                record = by_id[item_id]
+                emb = cosine_distance(query["vector"], record["vector"])
+                sem = cosine_distance(query["keyVector"], key_vectors[record["key"]])
+                rescored.append((beta * sem + (1.0 - beta) * emb, item_id))
+            rescored.sort(key=lambda row: (row[0], row[1]))
+            mixed_ids = [item_id for _, item_id in rescored]
+            beta_stats[beta]["rerankMs"].append((time.perf_counter_ns() - rerank_start) / 1_000_000.0)
+            # Match the Python image benchmark exactly: every method is judged
+            # against mixed ground truth for the current beta. At beta=1 IDs
+            # are tied within a semantic key, so the paper code uses key recall.
+            if beta > 0.999999:
+                beta_stats[beta]["rawRecalls"].append(key_hit_rate(exact_mixed, raw_ids, by_id, args.top_k))
+                beta_stats[beta]["rawNdcgs"].append(key_ndcg(exact_mixed, raw_ids, by_id, args.top_k))
+                beta_stats[beta]["mixedRecalls"].append(key_hit_rate(exact_mixed, mixed_ids, by_id, args.top_k))
+                beta_stats[beta]["mixedNdcgs"].append(key_ndcg(exact_mixed, mixed_ids, by_id, args.top_k))
+            else:
+                beta_stats[beta]["rawRecalls"].append(overlap(exact_mixed, raw_ids, args.top_k))
+                beta_stats[beta]["rawNdcgs"].append(ndcg(exact_mixed, raw_ids, args.top_k))
+                beta_stats[beta]["mixedRecalls"].append(overlap(exact_mixed, mixed_ids, args.top_k))
+                beta_stats[beta]["mixedNdcgs"].append(ndcg(exact_mixed, mixed_ids, args.top_k))
+            progress_completed += 1
+            show_progress(f"{backend.name}/{dataset_name}", progress_completed, progress_total)
     backend.close()
+
+    runs = []
+    for beta in betas:
+        raw_db_ms = beta_stats[beta]["rawDbMs"]
+        candidate_db_ms = beta_stats[beta]["candidateDbMs"]
+        rerank_ms = beta_stats[beta]["rerankMs"]
+        runs.append({
+            "beta": beta,
+            "rawVector": {
+                "recallAtK": mean(beta_stats[beta]["rawRecalls"]),
+                "ndcgAtK": mean(beta_stats[beta]["rawNdcgs"]),
+            },
+            "rawLatencyMs": {
+                "databaseMean": mean(raw_db_ms),
+                "databaseP50": percentile(raw_db_ms, 50),
+                "databaseP95": percentile(raw_db_ms, 95),
+            },
+            "mixedRerank": {
+                "recallAtK": mean(beta_stats[beta]["mixedRecalls"]),
+                "ndcgAtK": mean(beta_stats[beta]["mixedNdcgs"]),
+            },
+            "latencyMs": {
+                "databaseMean": mean(candidate_db_ms),
+                "databaseP50": percentile(candidate_db_ms, 50),
+                "databaseP95": percentile(candidate_db_ms, 95),
+                "rerankMean": mean(rerank_ms),
+                "totalMean": mean([a + b for a, b in zip(candidate_db_ms, rerank_ms)]),
+            },
+        })
 
     result = {
         "schemaVersion": 1,
         "backend": backend.name,
         "dataset": dataset_name,
-        "scale": {"fold": 0, "trainingVectors": len(records), "queries": len(queries), "topK": args.top_k},
-        "config": {**backend.config, "beta": args.beta, "candidateMultiplier": args.candidate_multiplier},
-        "buildMs": build_ms,
-        "rawVector": {"recallAtK": mean(raw_recalls), "ndcgAtK": mean(raw_ndcgs)},
-        "mixedRerank": {"recallAtK": mean(mixed_recalls), "ndcgAtK": mean(mixed_ndcgs)},
-        "latencyMs": {
-            "databaseMean": mean(db_ms), "databaseP50": percentile(db_ms, 50), "databaseP95": percentile(db_ms, 95),
-            "rerankMean": mean(rerank_ms), "totalMean": mean([a + b for a, b in zip(db_ms, rerank_ms)]),
+        "scale": {**scale_protocol, "trainingVectors": len(records), "queries": len(queries), "topK": args.top_k},
+        "config": {
+            **backend.config,
+            **split_config,
+            "evaluationProtocol": "python-image-benchmark-mixed-gt-v2",
+            "betas": betas,
+            "candidateMultiplier": args.candidate_multiplier,
         },
+        "buildMs": build_ms,
+        "runs": runs,
         "provenance": {
             "generatedAtUtc": datetime.now(timezone.utc).isoformat(), "gitCommit": git_commit(),
             "runner": "tools/external_db_benchmark.py", "os": platform.platform(), "numpyVersion": np.__version__,
+            "clientVersions": {
+                "qdrant-client": metadata.version("qdrant-client"),
+                "pymilvus": metadata.version("pymilvus"),
+                "chromadb": metadata.version("chromadb"),
+            },
         },
     }
+    if len(runs) == 1:
+        result["config"]["beta"] = runs[0]["beta"]
+        result["rawVector"] = runs[0]["rawVector"]
+        result["rawLatencyMs"] = runs[0]["rawLatencyMs"]
+        result["mixedRerank"] = runs[0]["mixedRerank"]
+        result["latencyMs"] = runs[0]["latencyMs"]
     output = args.output or ROOT / "results" / "external" / f"{args.backend}-{dataset_name}-{args.scale}.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

@@ -279,6 +279,7 @@ def export_artifact(
     write_jsonl(output_dir / "ground_truth.jsonl", ground_truth)
     manifest = audit_file(dataset, input_path)
     manifest["schemaVersion"] = 1
+    manifest["protocol"] = "five-fold"
     manifest["recordIdFormat"] = "<dataset>/<folder>/<zero-based-index:08d>"
     manifest["folds"] = folds
     manifest["repMethod"] = rep_method

@@ -12,6 +12,7 @@ main() {
     println("  bench <smoke|partial|full> <1..6|t|v|a> = 单行批量评测")
     println("  parity <1..6> <maxQueries> <beta> = 真实样例逐 query 对照输出")
     println("  dbbench <mock|milvus|qdrant|chroma> <1..6> <smoke|partial|full> = 外部数据库评测")
+    println("  paper <cangjie_input.txt> <maxQueries> <beta|all> = 冻结 90/10 artifact 评测")
     print("请选择: ")
     let choice = readln()
     if (choice == "0") {
@@ -38,6 +39,17 @@ main() {
             throw IllegalArgumentException("用法: dbbench <mock|milvus|qdrant|chroma> <1..6> <smoke|partial|full>")
         }
         runExternalDbPreset(parts[1], parts[2], parts[3])
+    } else if (choice.startsWith("paper ")) {
+        let parts = choice.split(" ")
+        if (parts.size != 4 && parts.size != 5) {
+            throw IllegalArgumentException("用法: paper <cangjie_input.txt> <maxQueries> <beta|all> [summary.log]")
+        }
+        let summaryPath = if (parts.size == 5) { parts[4] } else { "" }
+        if (parts[3] == "all") {
+            runPaperArtifactSweep(parts[1], Int64.parse(parts[2]), summaryPath: summaryPath)
+        } else {
+            runPaperArtifact(parts[1], Int64.parse(parts[2]), Float64.parse(parts[3]), summaryPath: summaryPath)
+        }
     } else {
         interactiveBenchMain()
     }

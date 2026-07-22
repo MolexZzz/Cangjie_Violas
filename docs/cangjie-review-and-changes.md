@@ -48,10 +48,10 @@ Review 成果按两条完整技术链平均分配。这里的“负责”包括�
 | Faiss Flat/IVF/HNSW 文本侧基线与参数记录 | Milvus/Qdrant/Chroma 统一框架及图像侧数据库实验 |
 | 文本侧 full manifest、query/GT 和 profiling | 图像侧 full manifest、query/GT 和 profiling |
 
-两人的公共验收项仅包括稳定 recordId、五折划分、指标定义、实验 JSON schema 和最终汇总表，
+两人的公共验收项仅包括稳定 recordId、明确命名的 split 协议、指标定义、实验 JSON schema 和最终汇总表，
 不要求双方共同修改同一核心文件。A 可以用 Mock/Faiss 和文本 sample 独立验证自己的链路；B 可以用
-Mock/外部数据库适配器和图像 sample 独立验证自己的链路。真实 full 数据和数据库服务未就绪时，
-均应显式记录阻塞条件，不以 `N/A` 或 sample 结果代替正式结果。
+Mock/外部数据库适配器和图像 sample 独立验证自己的链路。真实 full 数据未就绪或数据库服务失败时，
+均应显式记录阻塞条件，不以 `N/A`、Mock 或 sample 结果代替正式结果。
 
 ## 2. 本轮已经完成的修改
 
@@ -262,10 +262,32 @@ mixed score，后续报告必须分栏呈现，不能把两种任务混为一个
 - 同时输出数据库原始 embedding Top-K 和 `Top-K × 80` 候选的 Python 论文公式 mixed rerank；
 - 输出 Recall/NDCG、建库时间、数据库 P50/P95、rerank/total latency 和 backend 配置；
 - 当前已通过 `dbbench mock 1 smoke` 的仓颉端到端验证；
-- 本机已具备三个 Python SDK，但 6333/19530/8000 端口尚无数据库服务，因此没有伪造真实结果。
+- 2026-07-21 已启动真实 Milvus 2.3.15、Qdrant 1.16.1 和 Chroma 1.5.5 服务；
+- 三个后端均通过 `dbbench <backend> 4 smoke`，使用 Caltech fold-0、1616 条训练向量和 20 条查询；
+- 真实 smoke 只证明连接、建库、查询和结果回传可用，不作为数据库性能排名或 full 结果。
 
 使用说明见 `docs/external-database-benchmark.md`，可选依赖见
-`tools/requirements-external-db.txt`。当前先固定 fold-0 搭框架；正式实验需循环五折并为每折重建集合。
+`tools/requirements-external-db.txt`。当前入口固定 fold-0 用于框架验证；正式复现应先支持 Python
+90/10 split，新增五折实验则需逐折重建集合。
+
+### 2.14 Python 图像数据流程与仓颉 artifact 的口径差异
+
+进一步核对冻结 Python 的 Caltech/CUB/COCO benchmark 后发现，现有 Python 代码默认按类别调用
+`train_test_split(test_size=0.1, random_state=42, shuffle=True)`，即 90% 建库、10% 查询；图像向量
+来自 CLIP `ViT-B/32`，semantic key vector 来自文本模板 `a photo of a {key}` 的归一化 CLIP 文本向量。
+
+当前仓颉 precomputed runner 则按 TXT 顺序做五折连续切分，并把 fold train representative 同时用作
+key vector。现有 TXT 也没有独立 `KEY_VECTOR` 字段。因此当前逐 query parity 只能证明 Python
+`VectorMap` 与仓颉在“同一 precomputed artifact 口径”下基本一致，不能直接证明已经复现论文
+benchmark 的原始数据流程。
+
+后续必须将两种协议分开命名：
+
+1. `python-paper-90-10`：复现 Python 指标，使用相同 CLIP、同一图片顺序、同一随机切分和独立文本 key vector；统一 artifact 及仓颉/Faiss/三数据库读取入口已经实现，详见 `docs/python-paper-90-10-protocol.md`；
+2. `five-fold`：作为新增稳健性实验，Python、仓颉、Faiss 和数据库共同读取同一冻结 split。
+
+仓颉仍保持两阶段设计：第一阶段使用冻结 Python 预处理逻辑一次性生成共享 artifact；第二阶段仓颉
+只负责读取 artifact、建图和检索。仓颉侧不重复实现 CLIP，否则模型版本和预处理差异会引入新变量。
 
 ## 3. 已完成验证
 
@@ -331,12 +353,13 @@ python tools\run_cangjie_benchmark.py --scale smoke --dataset 1
 
 | 当前问题 | 影响 | 主责 |
 |---|---|---|
-| 六个数据集目前都是 sample，尚未确认 full 来源、授权、版本和预处理口径 | 不能宣称已完成全量复现 | A 负责文本，B 负责图像 |
+| 三个图像 full 原始数据已下载并核验规模；三个文本 full 数据以及六套统一预处理仍待完成 | 只有原始图片不等于已完成全量复现 | A 负责文本，B 负责图像 |
 | 逐 query 对照目前只覆盖少量 sample query | 小样例一致不能证明 full 一致 | A 负责文本，B 负责图像 |
 | Yahoo 扩展测试仍存在少量 representative/mixed/HDMG Top-K 差异 | 可能影响最终 Recall/NDCG | A |
-| full query、五折切分和 ground truth 尚未冻结 SHA-256 | 不同实现可能实际使用不同实验输入 | A/B 各负责三个数据集 |
+| full query、Python 90/10 split、可选五折和 ground truth 尚未冻结 SHA-256 | 不同实现可能实际使用不同实验输入 | A/B 各负责三个数据集 |
 | Python 论文脚本的采样、候选池、GT 和指标口径仍需逐项核对 | 可能出现“指标同名但任务不同” | A 复核搜索公式，B 复核 benchmark/GT |
-| 三个真实数据库尚未启动并完成五折运行 | 当前只能证明接口和 Mock 链路可用 | B，A 交叉复核统一指标 |
+| 三套图像 full artifact、固定 CLIP 哈希和逐行共享输入审计已完成；Caltech 已跑 200 query，CUB/COCO 及外部数据库 full 指标待跑 | 目前只能报告 Caltech 阶段结果，不能宣称三套图像实验全部完成 | B |
+| 三个真实数据库已完成 Caltech 统一 90/10 artifact smoke，但尚未完成 full 正式运行 | 当前只能证明同一冻结输入下的真实服务链路可用 | B，A 交叉复核统一指标 |
 
 ### P1：全量性能和灵活性
 
@@ -347,7 +370,7 @@ python tools\run_cangjie_benchmark.py --scale smoke --dataset 1
 | 主数据通路仍以 Float64 为主，尚未评估 Float32 | 与 Faiss/数据库比较时内存和吞吐口径不一致 | A 做基础通路，B 做 benchmark 统计 |
 | HDMG 构图虽已取消 O(G²) 内存矩阵，但计算量仍为 O(G²) | full group 数量较大时可能成为主要瓶颈 | B |
 | 尚未统一记录峰值内存、索引大小、预热和重复次数 | 性能数据不足以形成公平结论 | B 设计口径，A 补文本结果 |
-| Faiss 和数据库 SDK/参数尚未完成同机同数据校准 | 横向结果可能受默认参数影响 | A 负责 Faiss，B 负责三个数据库 |
+| 三数据库真实 smoke 已跑通，但服务版本、索引参数和重复次数尚未完成正式校准 | 横向结果可能受默认参数影响 | A 负责 Faiss，B 负责三个数据库 |
 | 目前依赖可执行回归入口，尚无正式 `cjpm test` 测试目录 | 自动化回归和持续集成能力不足 | A 负责算法测试，B 负责 benchmark 测试 |
 
 ### 已知接口限制
@@ -357,15 +380,41 @@ python tools\run_cangjie_benchmark.py --scale smoke --dataset 1
 - 仓颉 groupId 仍是本地 16 位 hash，与 Python MD5 32 位不一致；
 - 仓颉侧通过进程协议调用三个数据库的 Python SDK，并非仓颉原生数据库客户端；当前优点是接口统一、
   可替换，代价是需要管理 Python 环境、服务地址和进程错误；
-- 数据库框架当前固定 fold-0，尚未实现一次命令循环五折、隔离 collection 并汇总均值/方差；
+- 数据库框架已能读取 Python 90/10 artifact；五折自动循环、collection 隔离和结果汇总仍待完成；
 - 尚未实现持久化、GPU backend、完整 CRUD/relations 或 CodeAgent 数据模型。
 
 ## 5. 下一步建议顺序
 
 1. A 扩大三个文本 sample 的 query 对照并定位 Yahoo 边界差异；B 同时扩大三个图像 sample 对照；
-2. A/B 分别获取文本/图像 full artifact，冻结来源、预处理配置、五折 query/GT 和 SHA-256；
+2. A/B 分别获取文本/图像 full artifact；图像先冻结 Python 90/10 query/GT，五折作为独立协议；
 3. A 在文本侧运行仓颉与 Faiss；B 在图像侧运行仓颉、Faiss 与三个数据库，统一记录资源和延迟；
 4. A 推进 Float32、rep/single 索引和算法测试；B 推进 HDMG profiling、graph state 抽离和 benchmark 测试；
 5. 两人交换一组数据复跑，检查 schema、指标和实验命令可复现性；
 6. 汇总修改前/后、Python、Faiss、三个数据库的结果，并明确 exact、ANN 和 mixed 任务的区别；
 7. 如果前述任务按期完成，再进入 CodeAgent/仓颉项目组织的可选阶段。
+## 2026-07-22 HDMG 性能对齐
+
+Caltech 冻结 `python-paper-90-10` artifact 的性能审计发现，仓颉工程虽然输出到
+`target/release`，但编译器未收到优化选项，实际使用默认 `-O0`；同时每次余弦距离
+都会重复计算两个向量范数。Python 参考实现则使用预归一化 Float32 矩阵、批量矩阵
+乘法和部分 Top-K 选择。
+
+本轮在不改变 HDMG 搜索参数和评价口径的前提下完成：
+
+- 仓颉编译选项改为 `-O2`；
+- 冻结论文 artifact 在加载时统一执行 L2 归一化；
+- 新增 `cosine_normalized` 距离路径，以 `1 - dot(a, b)` 代替重复范数计算；
+- HDMG 构图、入口选择、图遍历、候选重排以及论文协议的精确检索均使用相同的
+  归一化快速路径；
+- `PAPER_SUMMARY` 写入 `implementation=normalized-f64-o2`，防止 `-Resume` 复用旧
+  O0 性能结果；
+- 每次查询继续与冻结的 Python Ground Truth 对照，不一致立即终止。
+
+同一台机器、Caltech 7,766 条训练向量、3 个固定查询、11 个 beta 下，HDMG 平均延迟
+由 `76.50 ms/query` 降至 `1.25 ms/query`，约加速 `61.4x`；构图时间由约 `77.6 s`
+降至约 `0.91 s`，约加速 `85x`，所有 Recall 行与优化前一致。
+
+进一步使用正式 200 个查询验证，11 个 beta 的 HDMG 延迟为 `0.90–1.48 ms/query`，
+平均 `1.29 ms/query`；最低 Mixed Recall@3 为 `0.9983`。这表明当前仓颉实现已经达到
+Python 论文约 2 ms/query 的同一性能量级。Float32 连续存储仍可将向量内存约减半，
+但当前不再是查询延迟的首要瓶颈，后续应作为独立内存优化实验并重新验证排序稳定性。

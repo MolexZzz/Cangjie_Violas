@@ -6,6 +6,10 @@
 # Datasets and generated benchmark artifacts
 /dataset/*
 !/dataset/.gitkeep
+/model/*
+!/model/.gitkeep
+/photo-data/images/
+/photo-data/*.json
 /artifacts/
 /results/
 **/data/
@@ -16,6 +20,11 @@
 *.npz
 *.pkl
 *.pickle
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
 
 # Cangjie build output
 /cj_core/target/
@@ -37,6 +46,14 @@ dist/
 .ruff_cache/
 .coverage
 htmlcov/
+*.log
+*.pid
+*.tmp
+
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example
 
 # IDE and operating-system files
 .idea/

@@ -7,13 +7,25 @@ import std.collection.*
 // ============= 数学工具 =============
 
 /* 计算向量的点积 */
-func dotProduct(a: Array<Float64>, b: Array<Float64>): Float64 {
+public func dotProduct(a: Array<Float64>, b: Array<Float64>): Float64 {
     if (a.size != b.size) {
         throw IllegalArgumentException("向量维度不一致: ${a.size} != ${b.size}")
     }
     var sum = 0.0
     for (i in 0..a.size) { sum += a[i] * b[i] }
     return sum
+}
+
+// Fast cosine distance for vectors whose L2 norm is already 1.0. Paper
+// artifacts use this path after an explicit normalization at load time.
+public func cosineDistanceNormalized(a: Array<Float64>, b: Array<Float64>): Float64 {
+    return 1.0 - dotProduct(a, b)
+}
+
+public func normalizedVector(v: Array<Float64>): Array<Float64> {
+    let norm = l2Norm(v)
+    if (abs(norm) < 1e-12) { return Array<Float64>(v.size, { i => v[i] }) }
+    return Array<Float64>(v.size, { i => v[i] / norm })
 }
 
 /* 计算向量的 L2 范数 */

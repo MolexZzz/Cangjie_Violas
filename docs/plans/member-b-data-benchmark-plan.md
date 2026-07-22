@@ -59,7 +59,10 @@ Faiss 是包含多种索引、量化、SIMD、并行和平台适配的成熟库�
 - 已拆出 `hdmg.cj` 中的配置与评分边界，graph state/build/walk 尚未完整迁出 `VectorMap`；
 - benchmark 已具备非交互命令、Recall/NDCG、mean/P50/P95、build trace 和 Result JSON；
 - 已建立稳定 recordId、sample manifest 和 artifact exporter；六个现有文件仍未验证为 full；
-- 已建立 Milvus/Qdrant/Chroma 统一适配器和仓颉进程协议，Mock 端到端通过；真实服务尚未启动。
+- 已建立 Milvus/Qdrant/Chroma 统一适配器和仓颉进程协议；Mock 及三个真实 Docker 服务的
+  Caltech smoke 均已通过，Python 90/10/full 正式实验尚未完成。
+- 已确认 Python 图像 benchmark 默认使用每类 90/10、`random_state=42` 的随机切分，而仓颉当前
+  precomputed runner 使用五折连续切分且缺独立 CLIP 文本 key vector；该差异列为下一项 P0。
 
 以上内容只证明整改和实验框架已经形成，不代表三个数据库或图像 full 实验已经完成。
 
@@ -107,7 +110,7 @@ Faiss 是包含多种索引、量化、SIMD、并行和平台适配的成熟库�
 - 输出包含 dataset/config hash、commit 和环境的 Result JSON；
 - reporter 直接读取 Result JSON，不使用手工抄表或仅保留截图；
 - 保留错误、超时和资源不足状态，禁止用 `N/A` 冒充真实实验结果。
-- 将现有 fold-0 数据库入口扩展为五折集合隔离、逐折重建和均值/方差汇总。
+- 先将数据库入口对齐 Python 90/10 split；五折作为独立协议实现集合隔离、逐折重建和汇总。
 
 ### 4.4 回归测试
 
@@ -179,9 +182,9 @@ Faiss 记录 HNSW `M`、construction/search 参数；数据库记录相应索引
 | 日期 | 计划工作 | 下班前提交/汇报 |
 |---|---|---|
 | **7 月 21 日** | 完成 HDMG/benchmark review；复核首轮修改；审计图像 sample 和数据库框架 | 本个人计划；已完成修改、P0/P1 遗留和当前数据/代码量证据 |
-| **7 月 22 日** | 扩大三个图像 sample 对照；补 HDMG/指标回归；准备三数据库服务配置 | entry/walk/rerank trace、Result JSON、Mock/服务命令 |
-| **7 月 23 日** | 收敛 HDMG/runner P0；提交图像 full 获取方案和数据库五折方案 | “Review 修改 + 图像实验”闭环；明确未完成和阻塞项 |
-| **7 月 24—27 日** | 准备 full artifact；启动 Milvus/Qdrant/Chroma；完成 profiling 和参数扫描 | 配置/hash/commit；真实数据库结果；性能 before/after |
+| **7 月 22 日** | 对齐 Python 90/10 split 和 CLIP 文本 key vector；扩大图像 sample 对照 | 数据协议、差异清单、Result JSON 和三数据库真实 smoke |
+| **7 月 23 日** | 收敛数据/HDMG P0；提交图像 full 获取方案和正式数据库方案 | “数据对齐 + 真实服务 + 图像实验”闭环；明确阻塞项 |
+| **7 月 24—27 日** | 准备 full artifact；在三数据库运行 Python 90/10，另做可选五折；完成 profiling | 配置/hash/commit；正式数据库结果；性能 before/after |
 | **7 月 28 日** | 收敛 HDMG 差异，至少跑通一个图像 full 数据 | Python/仓颉/Faiss/数据库对照；调优结果；剩余风险 |
 | **7 月 29 日** | 合并公共代码后，在统一 commit 上重跑三个图像数据集 | 合并回归结果和最终复现命令 |
 | **7 月 30 日** | 整理图像部分最终结果、测试、已知限制和后续建议 | 图像实验包、个人总结和最终报告对应章节 |
@@ -205,8 +208,9 @@ Faiss 记录 HNSW `M`、construction/search 参数；数据库记录相应索引
 - 7 月 28 日前至少一个图像 full 数据集完成闭环；最终目标为三个图像 full 数据均可运行；确因来源、许可或资源无法完成的，必须提供客观证据且不得以 sample 替代；
 - HDMG 主要差异有逐 query、entry/walk/rerank trace；
 - 至少一项正确性修复和一项性能优化有测试及 before/after；
-- 三个数据库至少先在同一 smoke artifact 上完成端到端实验；正式结论必须使用五折和 full 数据，
-  若服务、资源或数据受阻，应提交错误日志和复现命令，不以 Mock 结果替代；
+- 三个数据库已在同一 smoke artifact 上完成端到端实验；正式结论必须先复现 Python 90/10 和
+  full 数据，五折作为单独的稳健性实验；若服务、资源或数据受阻，应提交错误日志和复现命令，
+  不以 Mock 结果替代；
 - Faiss 源码与实验比较口径清楚，不以 LOC 判断优劣；
 - 实验结果绑定统一 artifact、配置、commit 和环境。
 

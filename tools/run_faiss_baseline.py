@@ -15,6 +15,7 @@ import faiss
 import numpy as np
 
 from precomputed_artifacts import DATASET_FILES, Folder, load_file
+from paper_artifact import load_artifact
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -142,6 +143,7 @@ def evaluate(method: str, training: np.ndarray, queries: np.ndarray, gt: list[li
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", choices=sorted(DATASET_FILES), default="news20")
+    parser.add_argument("--artifact", type=Path, help="python-paper-90-10 artifact directory; disables local splitting")
     parser.add_argument("--max-vectors-per-folder", type=int, default=20)
     parser.add_argument("--max-queries", type=int, default=20)
     parser.add_argument("--top-k", type=int, default=3)
@@ -155,25 +157,42 @@ def main() -> int:
     if min(args.max_queries, args.top_k, args.nlist, args.nprobe, args.hnsw_m, args.ef_construction, args.ef_search) <= 0:
         parser.error("query/index parameters must be positive")
 
-    source = ROOT / "dataset" / "precomputed" / DATASET_FILES[args.dataset]
-    folders = load_file(source)
-    training, queries = fold_zero(folders, args.max_vectors_per_folder, args.max_queries)
-    gt = ground_truth(training, queries, args.top_k)
+    if args.artifact:
+        manifest, artifact_records, artifact_queries, _, artifact_gt = load_artifact(args.artifact)
+        if args.top_k > manifest["topK"]:
+            parser.error(f"artifact only contains ground truth through topK={manifest['topK']}")
+        if args.max_queries:
+            artifact_queries = artifact_queries[:args.max_queries]
+        training = normalized_matrix([row["vector"] for row in artifact_records])
+        queries = normalized_matrix([row["vector"] for row in artifact_queries])
+        positions = {row["recordId"]: index for index, row in enumerate(artifact_records)}
+        gt = [[positions[item_id] for item_id in artifact_gt[(row["queryId"], 0.0)]] for row in artifact_queries]
+        source = args.artifact / "manifest.json"
+        dataset_name = manifest["dataset"]
+        split_config = {"protocol": manifest["protocol"], "artifactStatus": manifest["artifactStatus"]}
+        source_limits = {}
+    else:
+        source = ROOT / "dataset" / "precomputed" / DATASET_FILES[args.dataset]
+        folders = load_file(source)
+        training, queries = fold_zero(folders, args.max_vectors_per_folder, args.max_queries)
+        gt = ground_truth(training, queries, args.top_k)
+        dataset_name = args.dataset
+        split_config = {"protocol": "precomputed-five-fold", "fold": 0, "folds": 5}
+        source_limits = {"maxVectorsPerFolder": args.max_vectors_per_folder}
     result = {
         "schemaVersion": 1,
         "backend": "faiss-cpu",
         "scope": "single-vector cosine baseline; no Violas semantic mixed score",
-        "dataset": args.dataset,
-        "source": source.relative_to(ROOT).as_posix(),
+        "dataset": dataset_name,
+        "source": source.relative_to(ROOT).as_posix() if source.is_relative_to(ROOT) else str(source),
         "scale": {
-            "fold": 0,
-            "folds": 5,
             "trainingVectors": int(training.shape[0]),
             "queries": int(queries.shape[0]),
             "dimension": int(training.shape[1]),
-            "maxVectorsPerFolder": args.max_vectors_per_folder,
             "topK": args.top_k,
             "dtype": "float32",
+            **split_config,
+            **source_limits,
         },
         "groundTruth": "stable NumPy brute-force cosine/IP",
         "results": [evaluate(method, training, queries, gt, args) for method in ("exact", "ivf", "hnsw")],
@@ -187,7 +206,7 @@ def main() -> int:
             "machine": platform.machine(),
         },
     }
-    output = args.output or ROOT / "results" / "faiss" / f"{args.dataset}-sample.json"
+    output = args.output or ROOT / "results" / "faiss" / f"{dataset_name}-sample.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({row["method"]: {key: row[key] for key in ("recallAtK", "ndcgAtK", "buildMs", "indexBytes", "latencyMs")} for row in result["results"]}, indent=2))

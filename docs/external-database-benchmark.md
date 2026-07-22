@@ -46,6 +46,31 @@ python tools\external_db_benchmark.py --backend qdrant --dataset 1 --scale smoke
 可选 Python 依赖见 `tools/requirements-external-db.txt`。数据库服务必须由实验环境显式启动；
 runner 不会自动下载镜像、启动服务或把连接失败伪装成 N/A 结果。
 
+### 当前工作站真实服务验证
+
+2026-07-21 已在 Docker 真实服务上完成 Caltech smoke：
+
+| 后端 | 服务/镜像版本 | 本机端口 | 仓颉入口验证 |
+|---|---|---|---|
+| Milvus | server 2.3.15，`pymilvus` 2.6.9 | 19530 | 通过 |
+| Qdrant | server 1.16.1，`qdrant-client` 1.17.0 | 6333 | 通过 |
+| Chroma | `chromadb/chroma:1.5.5`，client 1.5.5 | 8000 | 通过 |
+
+三者均使用同一 Caltech sample 的 fold-0、1616 条训练向量和 20 条查询，成功完成建库、插入、
+向量查询、`TopK × 80` 候选和 Mixed Rerank。该结果证明真实连接链路可用，但仍是 smoke，不能
+代替 full 数据和正式重复实验。
+
+当前工作站后续可直接启动已有容器：
+
+```powershell
+docker start milvus-etcd milvus-minio milvus-standalone
+docker start violas-qdrant
+docker start violas-chroma
+```
+
+其中 Qdrant 与 Chroma 只绑定 `127.0.0.1`；Milvus 是工作站原有 Compose 服务。迁移到其他机器时，
+应按官方 Docker/Compose 文档重新创建并固定镜像版本，不能依赖上述本机容器名称。
+
 ## 输出字段
 
 - `rawVector.recallAtK/ndcgAtK`：数据库原始向量结果；
@@ -56,5 +81,7 @@ runner 不会自动下载镜像、启动服务或把连接失败伪装成 N/A �
 - `config`：数据库地址、索引、metric、beta、candidate multiplier；
 - `provenance`：Git commit、系统和依赖环境。
 
-正式实验时每个 fold 应重建独立 collection，避免训练集之间相互污染。当前框架先固定 fold-0，
-用于搭建和调试；扩展 full 时再循环五个 fold。
+正式实验时每个 split/fold 应重建独立 collection，避免训练集之间相互污染。当前框架既保留
+`precomputed-five-fold` 的 fold-0 调试入口，也支持直接读取冻结的 `python-paper-90-10` artifact。
+90/10 只在预处理阶段按类别和 `random_state=42` 生成一次；数据库不再自行切分。五折仍作为另一个
+明确命名的实验协议，不能与 Python 原指标混用。具体命令见 `docs/python-paper-90-10-protocol.md`。

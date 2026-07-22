@@ -59,8 +59,10 @@ group ID、对象 CRUD、关系检索等差异不会直接决定当前六数据�
 Python benchmark 已包含 Milvus、Qdrant、Chroma，默认通过 `VIOLAS_ENABLE_EXTERNAL_DBS=1` 开启。
 
 仓颉目前已通过统一进程协议接入 Milvus、Qdrant、Chroma 的建库、插入、查询和 mixed rerank，
-并用 Mock 完成端到端验证。三个真实服务尚未启动，当前仍没有可提交的真实五折/full 横向结果，
-不得用 Mock 或 `N/A` 代替。
+并已在三个真实 Docker 服务上完成 Caltech smoke。随后又用同一份 Caltech
+`python-paper-90-10` validation artifact 完成仓颉、Faiss 和三个真实数据库的读取验证。
+虽然已改用真实 CLIP 文本 key vector，但图片输入仍是 sample，因此这仍不是 90/10/full 正式横向结果，
+不得用 smoke、Mock 或 `N/A` 代替。
 
 需要注意，Python 的 mixed database 结果并不是数据库原生混合检索，而是：
 

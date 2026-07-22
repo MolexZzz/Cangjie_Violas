@@ -185,6 +185,7 @@ public class VectorMap <: ToString {
         if (distanceMethod == "euclidean") { return euclideanDistance }
         if (distanceMethod == "manhattan") { return manhattanDistance }
         if (distanceMethod == "cosine") { return cosineDistance }
+        if (distanceMethod == "cosine_normalized") { return cosineDistanceNormalized }
         throw IllegalArgumentException("不支持的距离方法: ${distanceMethod}")
     }
 
@@ -718,7 +719,8 @@ public class VectorMap <: ToString {
         semanticIntraK!: Int64 = 4,
         semanticBridgeKeys!: Int64 = 2,
         semanticBridgePerKey!: Int64 = 1,
-        useMutualEmbedding!: Bool = true
+        useMutualEmbedding!: Bool = true,
+        assumeNormalized!: Bool = false
     ): Unit {
         let buildStartNs = _nowNs()
         if (embeddingK < 0 || semanticIntraK < 0 || semanticBridgeKeys < 0 || semanticBridgePerKey < 0) {
@@ -750,13 +752,14 @@ public class VectorMap <: ToString {
             this.hdmgLastSearchStats["t_build_ns"] = _nowNs() - buildStartNs
             return
         }
+        let hdmgDistance = if (assumeNormalized) { cosineDistanceNormalized } else { cosineDistance }
 
         let directedKnn = ArrayList<ArrayList<Int64>>()
         for (i in 0..n) {
             let scores = ArrayList<HdmgScore>()
             for (j in 0..n) {
                 if (i != j) {
-                    let d = cosineDistance(this.hdmgNodeGroups[i].representative, this.hdmgNodeGroups[j].representative)
+                    let d = hdmgDistance(this.hdmgNodeGroups[i].representative, this.hdmgNodeGroups[j].representative)
                     scores.add(HdmgScore(d, j))
                 }
             }
@@ -796,9 +799,10 @@ public class VectorMap <: ToString {
                 let reps = Array<Array<Float64>>(nodeIds.size, { idx => this.hdmgNodeGroups[nodeIds[idx]].representative })
                 let centroid = _meanVector(reps)
                 var bestId = nodeIds[0]
-                var bestD = cosineDistance(centroid, this.hdmgNodeGroups[bestId].representative)
+                let normalizedCentroid = if (assumeNormalized) { normalizedVector(centroid) } else { centroid }
+                var bestD = hdmgDistance(normalizedCentroid, this.hdmgNodeGroups[bestId].representative)
                 for (nid in nodeIds) {
-                    let d = cosineDistance(centroid, this.hdmgNodeGroups[nid].representative)
+                    let d = hdmgDistance(normalizedCentroid, this.hdmgNodeGroups[nid].representative)
                     if (d < bestD) {
                         bestD = d
                         bestId = nid
@@ -819,7 +823,7 @@ public class VectorMap <: ToString {
                 let sameScores = ArrayList<HdmgScore>()
                 for (nid in baseKeyToNodeIds[bk]) {
                     if (nid != i) {
-                        let d = cosineDistance(this.hdmgNodeGroups[i].representative, this.hdmgNodeGroups[nid].representative)
+                        let d = hdmgDistance(this.hdmgNodeGroups[i].representative, this.hdmgNodeGroups[nid].representative)
                         sameScores.add(HdmgScore(d, nid))
                     }
                 }
@@ -838,7 +842,7 @@ public class VectorMap <: ToString {
                     if (otherBk == bk) { continue }
                     let okOpt = getKeyVector(otherBk)
                     if (okOpt.isSome()) {
-                        keyScores.add(HdmgScore(cosineDistance(qkOpt.getOrThrow(), okOpt.getOrThrow()), bi))
+                        keyScores.add(HdmgScore(hdmgDistance(qkOpt.getOrThrow(), okOpt.getOrThrow()), bi))
                     }
                 }
                 sort(keyScores, by: { a, b => a.compare(b) })
@@ -848,7 +852,7 @@ public class VectorMap <: ToString {
                     let cands = baseKeyToNodeIds[otherBk]
                     let candScores = ArrayList<HdmgScore>()
                     for (nid in cands) {
-                        let d = cosineDistance(this.hdmgNodeGroups[i].representative, this.hdmgNodeGroups[nid].representative)
+                        let d = hdmgDistance(this.hdmgNodeGroups[i].representative, this.hdmgNodeGroups[nid].representative)
                         candScores.add(HdmgScore(d, nid))
                     }
                     sort(candScores, by: { a, b => a.compare(b) })
@@ -864,10 +868,11 @@ public class VectorMap <: ToString {
 
         let allReps = Array<Array<Float64>>(n, { i => this.hdmgNodeGroups[i].representative })
         let meanRep = _meanVector(allReps)
+        let normalizedMeanRep = if (assumeNormalized) { normalizedVector(meanRep) } else { meanRep }
         var entry = 0
-        var entryD = cosineDistance(meanRep, this.hdmgNodeGroups[0].representative)
+        var entryD = hdmgDistance(normalizedMeanRep, this.hdmgNodeGroups[0].representative)
         for (i in 1..n) {
-            let d = cosineDistance(meanRep, this.hdmgNodeGroups[i].representative)
+            let d = hdmgDistance(normalizedMeanRep, this.hdmgNodeGroups[i].representative)
             if (d < entryD) {
                 entryD = d
                 entry = i
@@ -884,6 +889,7 @@ public class VectorMap <: ToString {
         this.hdmgLastSearchStats["semantic_bridge_keys"] = semanticBridgeKeys
         this.hdmgLastSearchStats["semantic_bridge_per_key"] = semanticBridgePerKey
         this.hdmgLastSearchStats["use_mutual_embedding"] = useMutualEmbedding
+        this.hdmgLastSearchStats["assume_normalized"] = assumeNormalized
         var embeddingEdgeCount: Int64 = 0
         for (edges in this.hdmgEmbeddingEdges) { embeddingEdgeCount += edges.size }
         var semanticEdgeCount: Int64 = 0
@@ -900,7 +906,8 @@ public class VectorMap <: ToString {
             semanticIntraK: config.semanticIntraK,
             semanticBridgeKeys: config.semanticBridgeKeys,
             semanticBridgePerKey: config.semanticBridgePerKey,
-            useMutualEmbedding: config.useMutualEmbedding
+            useMutualEmbedding: config.useMutualEmbedding,
+            assumeNormalized: config.assumeNormalized
         )
     }
 
