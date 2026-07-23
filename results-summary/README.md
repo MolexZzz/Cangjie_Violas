@@ -5,8 +5,11 @@
 
 ## 发布结果
 
+- [Table 2 三图像全量结果](table2-full-results.md)
+- [Faiss 检索与代码量对比](faiss-comparison.md)
+- [Table 3 数据与索引维护实验](table3-maintenance.md)
+- [HDMG 准确率—延迟参数扫描](hdmg-parameter-scan.md)
 - [最终指标 JSON](final-results.json)
-- [HDMG 参数扫描](hdmg-parameter-scan.md)
 
 `final-results.json` 固定了数据规模、β=0.5 的逐数据集结果、三数据集平均值、代码量对比、
 性能优化结果和原始结果 SHA-256。
