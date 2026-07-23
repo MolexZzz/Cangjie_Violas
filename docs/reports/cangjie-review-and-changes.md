@@ -266,7 +266,7 @@ mixed score，后续报告必须分栏呈现，不能把两种任务混为一个
 - 三个后端均通过 `dbbench <backend> 4 smoke`，使用 Caltech fold-0、1616 条训练向量和 20 条查询；
 - 真实 smoke 只证明连接、建库、查询和结果回传可用，不作为数据库性能排名或 full 结果。
 
-使用说明见 `docs/external-database-benchmark.md`，可选依赖见
+使用说明见 [`external-database-benchmark.md`](../guides/external-database-benchmark.md)，可选依赖见
 `tools/requirements-external-db.txt`。当前入口固定 fold-0 用于框架验证；正式复现应先支持 Python
 90/10 split，新增五折实验则需逐折重建集合。
 
@@ -283,7 +283,7 @@ benchmark 的原始数据流程。
 
 后续必须将两种协议分开命名：
 
-1. `python-paper-90-10`：复现 Python 指标，使用相同 CLIP、同一图片顺序、同一随机切分和独立文本 key vector；统一 artifact 及仓颉/Faiss/三数据库读取入口已经实现，详见 `docs/python-paper-90-10-protocol.md`；
+1. `python-paper-90-10`：复现 Python 指标，使用相同 CLIP、同一图片顺序、同一随机切分和独立文本 key vector；统一 artifact 及仓颉/Faiss/三数据库读取入口已经实现，详见 [`python-paper-90-10-protocol.md`](../guides/python-paper-90-10-protocol.md)；
 2. `five-fold`：作为新增稳健性实验，Python、仓颉、Faiss 和数据库共同读取同一冻结 split。
 
 仓颉仍保持两阶段设计：第一阶段使用冻结 Python 预处理逻辑一次性生成共享 artifact；第二阶段仓颉

@@ -272,7 +272,7 @@ Python 兼容行为作为默认实现。新增算法只需实现接口，不应�
 ## 6. 两人分工
 
 两人开始实现前，只共同冻结一次
-[`reproduction-contract.md`](plans/reproduction-contract.md)。此后按文件所有权并行开发，
+[`reproduction-contract.md`](../plans/reproduction-contract.md)。此后按文件所有权并行开发，
 不以对方尚未完成的代码作为自己的前置条件。
 
 ### 成员 A：基础/Mixed + 文本闭环
@@ -290,7 +290,7 @@ Python 兼容行为作为默认实现。新增算法只需实现接口，不应�
 - 独立完成准确率、性能调优和结果报告。
 
 两人都同时承担目标（1）的代码 review/修改和目标（2）的全量实验/Faiss 对比。完整边界见
-[`two-person-parallel-work-plan.md`](plans/two-person-parallel-work-plan.md)。
+[`two-person-parallel-work-plan.md`](../plans/two-person-parallel-work-plan.md)。
 
 ### 共同检查点
 

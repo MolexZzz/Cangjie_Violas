@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import platform
+import statistics
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -35,6 +36,54 @@ def git_commit() -> str | None:
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, capture_output=True, check=False
     )
     return result.stdout.strip() if result.returncode == 0 else None
+
+
+def aggregate_samples(rows: list[dict]) -> dict:
+    """Aggregate repeated rows while preserving every measured sample."""
+    first = rows[0]
+    result = {
+        key: value for key, value in first.items()
+        if key != "operations"
+    }
+    operations: dict[str, dict] = {}
+    for operation in first["operations"]:
+        template = first["operations"][operation]
+        metric_key = "batchMs" if "batchMs" in template else "ms"
+        samples = [
+            row["operations"][operation].get(metric_key)
+            for row in rows
+            if row["operations"][operation].get(metric_key) is not None
+        ]
+        entry = {key: value for key, value in template.items()
+                 if key not in {"batchMs", "perVectorMs", "ms"}}
+        if samples:
+            mean_ms = statistics.fmean(samples)
+            entry[metric_key] = mean_ms
+            entry["samplesMs"] = samples
+            entry["stdevMs"] = statistics.stdev(samples) if len(samples) > 1 else 0.0
+            entry["minMs"] = min(samples)
+            entry["maxMs"] = max(samples)
+            if metric_key == "batchMs" and entry.get("count"):
+                entry["perVectorMs"] = mean_ms / entry["count"]
+        else:
+            entry[metric_key] = None
+            entry["samplesMs"] = []
+            entry["stdevMs"] = None
+        operations[operation] = entry
+    result["operations"] = operations
+    result["repetitions"] = len(rows)
+    return result
+
+
+def repeated(label: str, count: int, warmups: int, action) -> dict:
+    for index in range(warmups):
+        print(f"MAINTENANCE_WARMUP|{label}|{index + 1}/{warmups}", flush=True)
+        action()
+    rows = []
+    for index in range(count):
+        print(f"MAINTENANCE_REPEAT|{label}|{index + 1}/{count}", flush=True)
+        rows.append(action())
+    return aggregate_samples(rows)
 
 
 def updated_vector(vector: list[float], offset: int) -> list[float]:
@@ -179,8 +228,8 @@ def run_database(name: str, dataset: str, dimension: int, base_records: list[dic
                 },
                 "indexUpdate": {
                     "records": len(update_records),
-                    "ms": update_ms,
-                    "strategy": "engine-managed; included in vectorUpdate",
+                    "ms": None,
+                    "strategy": "not separately observable from synchronous vectorUpdate",
                 },
             },
         }
@@ -250,6 +299,9 @@ def run_cangjie(artifact: Path, count: int, args: argparse.Namespace) -> dict:
 
 
 def markdown(payload: dict) -> str:
+    def ms(value: float | None) -> str:
+        return "N/A" if value is None else f"{value:.3f}"
+
     lines = [
         f"# Data and index maintenance: {payload['dataset']}",
         "",
@@ -262,11 +314,11 @@ def markdown(payload: dict) -> str:
         ops = row["operations"]
         lines.append(
             f"| {row['backend']} / {row['method']} | "
-            f"{ops['vectorInsertion']['batchMs']:.3f} | "
-            f"{ops['vectorUpdate']['batchMs']:.3f} | "
-            f"{ops['vectorDelete']['batchMs']:.3f} | "
-            f"{ops['indexConstruction']['ms']:.3f} | "
-            f"{ops['indexUpdate']['ms']:.3f} |"
+            f"{ms(ops['vectorInsertion']['batchMs'])} | "
+            f"{ms(ops['vectorUpdate']['batchMs'])} | "
+            f"{ms(ops['vectorDelete']['batchMs'])} | "
+            f"{ms(ops['indexConstruction']['ms'])} | "
+            f"{ms(ops['indexUpdate']['ms'])} |"
         )
     lines.extend([
         "",
@@ -274,7 +326,8 @@ def markdown(payload: dict) -> str:
         "",
         "- Faiss 插入使用原生 `add`；通用更新和删除采用完整重建，因为 HNSW 不支持通用原位删除。",
         "- 仓颉 Violas 使用稳定 record ID 完成对象插入、原位更新和删除；每批变更后完整重建 HDMG。",
-        "- Milvus、Qdrant、Chroma 的更新和索引维护由服务端同步完成，index update 已包含在 update 时间内。",
+        "- Milvus、Qdrant、Chroma 的同步 upsert 已包含服务端可见的数据与索引维护；"
+        "由于开源代码没有公开 Table 3 的独立 index-update 操作边界，这一列暂记 `N/A`，不重复抄写 update 时间。",
         "- 数据库的 initial build 包含建集合和初始数据写入，不能与 Faiss 的纯内存索引构建时间直接等同。",
         "",
     ])
@@ -285,6 +338,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact", type=Path, required=True)
     parser.add_argument("--mutation-count", type=int, default=200)
+    parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--warmup-runs", type=int, default=1)
     parser.add_argument("--backends", default="cangjie,faiss",
                         help="comma list: cangjie,faiss,mock,milvus,qdrant,chroma")
     parser.add_argument("--execution-mode", choices=("paper-local", "service"),
@@ -303,12 +358,21 @@ def main() -> int:
     parser.add_argument("--chroma-host", default=os.getenv("CHROMA_HOST", "127.0.0.1"))
     parser.add_argument("--chroma-port", type=int, default=int(os.getenv("CHROMA_PORT", "8000")))
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--resume", action="store_true",
+                        help="reuse completed backends from an existing output checkpoint")
+    parser.add_argument("--rerun-backends", default="",
+                        help="comma list of completed backends to replace while resuming")
     args = parser.parse_args()
+    if args.repeats <= 0 or args.warmup_runs < 0:
+        parser.error("--repeats must be positive and --warmup-runs must be non-negative")
 
     requested = [item.strip() for item in args.backends.split(",") if item.strip()]
     valid = {"cangjie", "faiss", "mock", "milvus", "qdrant", "chroma"}
     if not requested or set(requested) - valid:
         parser.error(f"--backends must contain only {sorted(valid)}")
+    rerun = {item.strip() for item in args.rerun_backends.split(",") if item.strip()}
+    if rerun - set(requested):
+        parser.error("--rerun-backends must be a subset of --backends")
 
     manifest, records, queries, _, _ = load_artifact(args.artifact)
     count = min(args.mutation_count, len(records), len(queries))
@@ -325,26 +389,22 @@ def main() -> int:
     ]
     update_records = base_records[:count]
 
+    output = args.output or ROOT / "results" / "maintenance" / f"{manifest['dataset']}.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
     results = []
-    for backend in requested:
-        print(f"MAINTENANCE_STAGE|{backend}|start", flush=True)
-        if backend == "cangjie":
-            results.append(run_cangjie(args.artifact, count, args))
-        elif backend == "faiss":
-            for method in ("exact", "ivf", "hnsw"):
-                results.append(run_faiss(
-                    method, base_records, insert_records, update_records, args
-                ))
-        else:
-            results.append(run_database(
-                backend, manifest["dataset"], manifest["dimension"], base_records,
-                insert_records, update_records, args
-            ))
-        print(f"MAINTENANCE_STAGE|{backend}|done", flush=True)
+    failures = []
+    if args.resume and output.exists():
+        checkpoint = json.loads(output.read_text(encoding="utf-8"))
+        if (checkpoint.get("dataset") != manifest["dataset"]
+                or checkpoint.get("scale", {}).get("mutationVectors") != count
+                or checkpoint.get("measurement", {}).get("repetitions") != args.repeats
+                or checkpoint.get("measurement", {}).get("warmupRuns") != args.warmup_runs):
+            parser.error("existing resume checkpoint does not match dataset/scale/measurement")
+        results = checkpoint.get("results", [])
 
     payload = {
-        "schemaVersion": 1,
-        "protocol": "violas-maintenance-v1",
+        "schemaVersion": 2,
+        "protocol": "violas-maintenance-v2",
         "dataset": manifest["dataset"],
         "artifact": str(args.artifact),
         "scale": {
@@ -352,12 +412,19 @@ def main() -> int:
             "mutationVectors": count,
             "dimension": manifest["dimension"],
         },
+        "measurement": {
+            "warmupRuns": args.warmup_runs,
+            "repetitions": args.repeats,
+            "reportedValue": "arithmetic mean; raw samples and sample standard deviation retained",
+            "paperTable3Status": "insertion/update/construction aligned by column name; external index-update boundary unavailable in released code",
+        },
         "cangjieViolas": {
             "status": "measured" if "cangjie" in requested else "not-requested",
             "objectIdentity": "stable record ID",
             "indexLifecycle": "every successful mutation invalidates HDMG; benchmark rebuilds it",
         },
         "results": results,
+        "failures": failures,
         "provenance": {
             "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
             "gitCommit": git_commit(),
@@ -366,13 +433,60 @@ def main() -> int:
             "numpyVersion": np.__version__,
         },
     }
-    output = args.output or ROOT / "results" / "maintenance" / f"{manifest['dataset']}.json"
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    md = output.with_suffix(".md")
-    md.write_text(markdown(payload), encoding="utf-8")
+
+    def persist() -> None:
+        output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+                          encoding="utf-8")
+        output.with_suffix(".md").write_text(markdown(payload), encoding="utf-8")
+
+    def backend_complete(name: str) -> bool:
+        if name == "faiss":
+            methods = {row["method"] for row in results if row["backend"] == "faiss"}
+            return {"IndexFlatIP", "IndexIVFFlat", "IndexHNSWFlat"} <= methods
+        actual = "cangjie-violas" if name == "cangjie" else name
+        return any(row["backend"] == actual for row in results)
+
+    for backend in requested:
+        if args.resume and backend_complete(backend) and backend not in rerun:
+            print(f"MAINTENANCE_STAGE|{backend}|resume-skip", flush=True)
+            continue
+        if backend in rerun:
+            actual = "cangjie-violas" if backend == "cangjie" else backend
+            results[:] = [row for row in results if row["backend"] != actual]
+        print(f"MAINTENANCE_STAGE|{backend}|start", flush=True)
+        try:
+            if backend == "cangjie":
+                results.append(repeated(
+                    "cangjie", args.repeats, args.warmup_runs,
+                    lambda: run_cangjie(args.artifact, count, args),
+                ))
+            elif backend == "faiss":
+                for method in ("exact", "ivf", "hnsw"):
+                    results.append(repeated(
+                        f"faiss-{method}", args.repeats, args.warmup_runs,
+                        lambda method=method: run_faiss(
+                            method, base_records, insert_records, update_records, args
+                        ),
+                    ))
+            else:
+                results.append(repeated(
+                    backend, args.repeats, args.warmup_runs,
+                    lambda backend=backend: run_database(
+                        backend, manifest["dataset"], manifest["dimension"], base_records,
+                        insert_records, update_records, args
+                    ),
+                ))
+            persist()
+            print(f"MAINTENANCE_STAGE|{backend}|done", flush=True)
+        except Exception as exc:
+            failures.append({"backend": backend, "error": f"{type(exc).__name__}: {exc}"})
+            persist()
+            print(f"MAINTENANCE_STAGE|{backend}|failed|{type(exc).__name__}", flush=True)
+            raise
+
+    persist()
     print(f"wrote {output}")
-    print(f"wrote {md}")
+    print(f"wrote {output.with_suffix('.md')}")
     return 0
 
 

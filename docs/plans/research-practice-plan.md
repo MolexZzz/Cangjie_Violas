@@ -1,6 +1,7 @@
 # Violas 两周科研实践计划（2026-07-20 ～ 2026-07-30）
 
-详细现状证据、接口差异、数据集完整性和横向数据库审计见 [`interface-data-benchmark-audit.md`](interface-data-benchmark-audit.md)。本计划中的分工与验收应以该审计结论为准。
+详细现状证据、接口差异、数据集完整性和横向数据库审计见
+[`interface-data-benchmark-audit.md`](../reports/interface-data-benchmark-audit.md)。本计划中的分工与验收应以该审计结论为准。
 
 > **修改边界：** `violas_python/` 是冻结的参考版本，本实践不修改 Python 核心、benchmark 或依赖文件。所有功能补齐和优化均在 `cj_core/` 完成；新增数据/实验工具只能放在独立目录，并以只读方式调用 Python 生成参考结果。
 
@@ -166,7 +167,7 @@ Faiss 对照使用官方仓库 `facebookresearch/faiss` 的 commit `7d4bb39f7eb3
 - 成员 B：HDMG、benchmark runner/指标/配置；caltech、cub、coco 及 Milvus/Qdrant/Chroma；
 - 两人各自在负责的数据集上运行 Python、修改前后仓颉和 Faiss，并分别完成准确率/性能调优。
 
-完整边界见 [`two-person-parallel-work-plan.md`](plans/two-person-parallel-work-plan.md)。
+完整边界见 [`two-person-parallel-work-plan.md`](two-person-parallel-work-plan.md)。
 
 | 日期 | 成员 A | 成员 B | 下班前汇报内容/验收物 |
 |---|---|---|---|

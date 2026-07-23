@@ -21,6 +21,13 @@ from paper_artifact import load_artifact
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# Local Docker services must never be routed through a workstation HTTP proxy.
+_local_no_proxy = {"127.0.0.1", "localhost"}
+_configured_no_proxy = {
+    item.strip() for item in os.environ.get("NO_PROXY", "").split(",") if item.strip()
+}
+os.environ["NO_PROXY"] = ",".join(sorted(_configured_no_proxy | _local_no_proxy))
+os.environ["no_proxy"] = os.environ["NO_PROXY"]
 DATASET_IDS = {"1": "news20", "2": "ohsumed", "3": "yahoo", "4": "caltech", "5": "cub", "6": "coco"}
 
 

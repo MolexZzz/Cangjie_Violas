@@ -3,6 +3,8 @@ param(
     [string]$RunRoot = "results/faiss-and-maintenance",
     [int]$MaxQueries = 0,
     [int]$MutationCount = 200,
+    [int]$MaintenanceRepeats = 3,
+    [int]$MaintenanceWarmupRuns = 1,
     [string]$MaintenanceBackends = "cangjie,faiss",
     [ValidateSet("paper-local", "service")]
     [string]$DatabaseExecutionMode = "service",
@@ -32,6 +34,8 @@ foreach ($dataset in $Datasets) {
     python (Join-Path $RepoRoot "tools/run_maintenance_benchmark.py") `
         --artifact $artifact `
         --mutation-count $MutationCount `
+        --repeats $MaintenanceRepeats `
+        --warmup-runs $MaintenanceWarmupRuns `
         --backends $MaintenanceBackends `
         --execution-mode $DatabaseExecutionMode `
         --local-state-dir (Join-Path $RunRoot "database-state") `

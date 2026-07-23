@@ -84,4 +84,5 @@ docker start violas-chroma
 正式实验时每个 split/fold 应重建独立 collection，避免训练集之间相互污染。当前框架既保留
 `precomputed-five-fold` 的 fold-0 调试入口，也支持直接读取冻结的 `python-paper-90-10` artifact。
 90/10 只在预处理阶段按类别和 `random_state=42` 生成一次；数据库不再自行切分。五折仍作为另一个
-明确命名的实验协议，不能与 Python 原指标混用。具体命令见 `docs/python-paper-90-10-protocol.md`。
+明确命名的实验协议，不能与 Python 原指标混用。具体命令见
+[`python-paper-90-10-protocol.md`](python-paper-90-10-protocol.md)。

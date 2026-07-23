@@ -29,6 +29,7 @@
 
 # Cangjie build output
 /cj_core/target/
+/cj_core/test-report/
 
 # Python bytecode, environments, and packaging output
 __pycache__/
