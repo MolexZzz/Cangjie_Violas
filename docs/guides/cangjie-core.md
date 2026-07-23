@@ -35,7 +35,8 @@ cjpm build
 cjpm test --no-color
 ```
 
-`storage_test.cj` 使用仓颉标准 `unittest`，覆盖 mixed score、向量数学和 `VectorGroup` CRUD。
+`storage_test.cj` 使用仓颉标准 `unittest`，覆盖 mixed score、向量数学、`VectorGroup` CRUD 与
+输入校验、索引生命周期、HDMG fallback、稳定排序和非法配置。
 
 核心集成回归：
 

@@ -7,9 +7,18 @@ import json
 import statistics
 from pathlib import Path
 
+from count_source_lines import source_line_count
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
 
 def average(values: list[float]) -> float:
     return statistics.fmean(values)
+
+
+def module_source_lines(root: Path, files: list[str]) -> int:
+    return sum(source_line_count(root / relative)[2] for relative in files)
 
 
 def main() -> int:
@@ -24,42 +33,106 @@ def main() -> int:
     faiss_payloads = [json.loads(path.read_text(encoding="utf-8")) for path in args.faiss]
     table2 = json.loads(args.table2.read_text(encoding="utf-8"))
     beta_half = next(row for row in table2["rows"] if abs(row["beta"] - 0.5) < 1e-9)
+    faiss_root = Path(loc["faiss"]["path"])
 
     faiss_by_method: dict[str, list[dict]] = {}
     for payload in faiss_payloads:
         for row in payload["results"]:
             faiss_by_method.setdefault(row["method"], []).append(row)
 
-    cangjie_core = loc["scopes"]["Cangjie storage core"]["sourceLines"]
-    cangjie_all = loc["scopes"]["Cangjie all src"]["sourceLines"]
-    faiss_cpu = loc["scopes"]["Faiss CPU library"]["sourceLines"]
-    faiss_all = loc["scopes"]["Faiss all library"]["sourceLines"]
+    module_scopes = [
+        {
+            "method": "仓颉 Violas HDMG/mixed",
+            "root": ROOT,
+            "files": [
+                "cj_core/src/storage/vectormap.cj",
+                "cj_core/src/storage/hdmg.cj",
+                "cj_core/src/storage/mixed_scoring.cj",
+            ],
+            "boundary": "HDMG 构建/遍历、w/o HDMG、候选重排和 mixed score",
+            "shared": "VectorGroup、向量距离工具、KMeans 聚类",
+        },
+        {
+            "method": "Faiss IndexFlatIP",
+            "root": faiss_root,
+            "files": [
+                "faiss/IndexFlat.cpp",
+                "faiss/IndexFlat.h",
+                "faiss/IndexFlatCodes.cpp",
+                "faiss/IndexFlatCodes.h",
+            ],
+            "boundary": "Flat 精确索引及其连续向量编码存储",
+            "shared": "Index 基类、公共距离计算和 SIMD 内核",
+        },
+        {
+            "method": "Faiss IndexIVFFlat",
+            "root": faiss_root,
+            "files": [
+                "faiss/IndexIVF.cpp",
+                "faiss/IndexIVF.h",
+                "faiss/IndexIVFFlat.cpp",
+                "faiss/IndexIVFFlat.h",
+            ],
+            "boundary": "IVF 基础流程和 IVFFlat 编码/扫描",
+            "shared": "Flat 量化器、Clustering、InvertedLists、距离内核",
+        },
+        {
+            "method": "Faiss IndexHNSWFlat",
+            "root": faiss_root,
+            "files": [
+                "faiss/IndexHNSW.cpp",
+                "faiss/IndexHNSW.h",
+                "faiss/impl/HNSW.cpp",
+                "faiss/impl/HNSW.h",
+            ],
+            "boundary": "HNSW 索引封装、建图和图搜索",
+            "shared": "IndexFlat 向量存储、公共距离计算和 SIMD 内核",
+        },
+    ]
 
     lines = [
-        "# Cangjie Violas 与 Faiss 正式对比",
+        "# 仓颉 Violas 与 Faiss 检索实现对比",
         "",
-        "## 功能范围与代码规模",
+        "## 可比代码范围",
         "",
-        "| 项目 | 仓颉 Violas | Faiss |",
+        "| 实现 | 主实现文件数 | 主实现源码行 | 本列包含 | 未计入的共享依赖 |",
+        "| --- | ---: | ---: | --- | --- |",
+    ]
+    for scope in module_scopes:
+        lines.append(
+            f"| {scope['method']} | {len(scope['files'])} | "
+            f"{module_source_lines(scope['root'], scope['files'])} | "
+            f"{scope['boundary']} | {scope['shared']} |"
+        )
+
+    lines.extend([
+        "",
+        "这里统计的是本实验实际使用索引的**主实现模块**，而不是整个仓库。"
+        "所有数字均为去除空行和纯注释后的源码行。公共依赖不重复计入某一种索引，"
+        "因此这些数字用于比较实现规模，不表示完整可独立编译的代码量。",
+        "",
+        "仓颉 `vectormap.cj` 同时包含部分 CRUD、关系和上下文接口；Faiss 的索引文件也包含"
+        "同系列变体。因此主实现源码行仍是模块级近似值，不应被解释为算法复杂度或代码质量排名。",
+        "Faiss 使用 C++，表中同时统计 `.h` 接口声明和 `.cpp` 实现；仓颉没有同样的头文件分离方式，"
+        "因此该表也不能用于评价两种编程语言谁更精简。",
+        "",
+        "## 功能边界",
+        "",
+        "| 项目 | 仓颉 Violas HDMG | Faiss Flat / IVF / HNSW |",
         "| --- | --- | --- |",
-        "| 主要定位 | 语义类别距离与图片 embedding 距离联合检索 | 通用高性能向量相似度检索库 |",
-        "| 当前索引 | HDMG；rep/single 当前仍是 exact-scan snapshot | Flat、IVF、HNSW、PQ 等成熟 CPU/GPU 索引 |",
-        "| Mixed score | 原生支持 β 加权语义/embedding 距离 | 不原生支持，需要应用层重排 |",
-        "| 数据维护 | 稳定 recordId 插入、更新、删除；变更后 HDMG 失效/重建 | 各索引能力不同；实验中对通用更新/删除采用重建 |",
-        "| 向量精度 | 当前核心为 Float64 | 实验输入与常用 CPU 索引为 Float32 |",
-        f"| 核心源码行（去纯注释） | storage `{cangjie_core}` 行；全部 src `{cangjie_all}` 行 | "
-        f"CPU library `{faiss_cpu}` 行；CPU+GPU `{faiss_all}` 行 |",
-        "| 代码规模解释 | 研究原型，覆盖 Violas 所需语义组织与实验框架 | 成熟工业库，覆盖量化、SIMD、多种索引、CPU/GPU 与广泛平台 |",
+        "| 检索目标 | β 加权的语义距离与 embedding 距离 | embedding 向量相似度 |",
+        "| 候选获取 | 实体路由、微簇和 HDMG 图遍历 | 精确扫描或 ANN 索引 |",
+        "| Mixed score | 原生完成候选 mixed 重排 | 索引本身不支持，需应用层增加 |",
+        "| 动态维护 | 数据变化后使 HDMG 失效并重建 | 能力随索引而异，统一实验采用重建 |",
+        "| 当前向量精度 | Float64 | Float32 |",
         "",
-        "代码行数只能描述实现范围，不能单独证明性能或工程质量。",
-        "",
-        "## 实验性能（不同任务，分开报告）",
+        "## 实验性能",
         "",
         "### 仓颉 Violas：β=0.5 的三图像数据集平均 Mixed Search",
         "",
         "| Method | Mixed Recall@3 | Mixed NDCG@3 | Mean latency (ms/query) |",
         "| --- | ---: | ---: | ---: |",
-    ]
+    ])
     for method in ("Violas", "w/o HDMG"):
         row = beta_half["methods"][method]
         lines.append(
@@ -96,6 +169,17 @@ def main() -> int:
         "Faiss 在这里承担的是底层向量索引基线；若要做严格端到端对比，应让 Faiss 先召回候选，"
         "再使用与 Violas 完全相同的 mixed score 重排。",
         "",
+        "## 主实现文件清单",
+        "",
+    ])
+    for scope in module_scopes:
+        lines.append(f"### {scope['method']}")
+        lines.append("")
+        for path in scope["files"]:
+            lines.append(f"- `{path}`")
+        lines.append("")
+
+    lines.extend([
         "## 可复现信息",
         "",
         f"- 仓颉仓库 commit：`{loc['repository']['gitCommit']}`",

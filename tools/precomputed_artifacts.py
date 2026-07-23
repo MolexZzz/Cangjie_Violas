@@ -307,7 +307,7 @@ def main() -> None:
 
     audit_parser = subparsers.add_parser("audit")
     audit_parser.add_argument("--input-dir", type=Path, default=Path("dataset/precomputed"))
-    audit_parser.add_argument("--output", type=Path, default=Path("manifests/current-artifacts.json"))
+    audit_parser.add_argument("--output", type=Path, default=Path("manifests/sample-artifacts.json"))
 
     export_parser = subparsers.add_parser("export")
     export_parser.add_argument("--input-dir", type=Path, default=Path("dataset/precomputed"))

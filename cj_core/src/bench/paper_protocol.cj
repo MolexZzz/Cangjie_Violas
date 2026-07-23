@@ -278,18 +278,42 @@ class PaperRuntime {
     let artifact: PaperArtifact
     let vectormap: VectorMap
     let flatItems: ArrayList<FlatItem>
+    let buildConfig: HdmgBuildConfig
     let searchConfig: HdmgSearchConfig
 
     init(artifact: PaperArtifact, vectormap: VectorMap, flatItems: ArrayList<FlatItem>,
-         searchConfig: HdmgSearchConfig) {
+         buildConfig: HdmgBuildConfig, searchConfig: HdmgSearchConfig) {
         this.artifact = artifact
         this.vectormap = vectormap
         this.flatItems = flatItems
+        this.buildConfig = buildConfig
         this.searchConfig = searchConfig
     }
 }
 
-func buildPaperRuntime(filePath: String): PaperRuntime {
+func defaultPaperBuildConfig(): HdmgBuildConfig {
+    return HdmgBuildConfig(
+        embeddingK: 12,
+        semanticIntraK: 20,
+        semanticBridgeKeys: 2,
+        semanticBridgePerKey: 1,
+        useMutualEmbedding: false,
+        assumeNormalized: true
+    )
+}
+
+func defaultPaperSearchConfig(): HdmgSearchConfig {
+    return HdmgSearchConfig(
+        maxSteps: 100,
+        entryAlphaThreshold: 0.3,
+        clusterPoolMultiplier: 3,
+        topKeyCandidates: 5,
+        extraHops: 0
+    )
+}
+
+func buildPaperRuntimeWithConfig(filePath: String, buildConfig: HdmgBuildConfig,
+                                 searchConfig: HdmgSearchConfig): PaperRuntime {
     var stageStart = DateTime.now().toUnixTimeStamp().toNanoseconds()
     println("PAPER_STAGE|load|start|path=${filePath}")
     let artifact = loadPaperArtifact(filePath)
@@ -324,25 +348,16 @@ func buildPaperRuntime(filePath: String): PaperRuntime {
     println("PAPER_STAGE|groups|done|ms=${Float64(stageEnd - stageStart) / 1000000.0}|groups=${byCluster.size}")
     stageStart = stageEnd
     vectormap.setKeyVectors(artifact.keys)
-    // These are the defaults used by caltech_bench.py/cub_bench.py/coco_bench.py.
-    vectormap.buildHdmgWithConfig(HdmgBuildConfig(
-        embeddingK: 12,
-        semanticIntraK: 20,
-        semanticBridgeKeys: 2,
-        semanticBridgePerKey: 1,
-        useMutualEmbedding: false,
-        assumeNormalized: true
-    ))
+    vectormap.buildHdmgWithConfig(buildConfig)
     stageEnd = DateTime.now().toUnixTimeStamp().toNanoseconds()
     println("PAPER_STAGE|hdmg|done|ms=${Float64(stageEnd - stageStart) / 1000000.0}")
-    let searchConfig = HdmgSearchConfig(
-        maxSteps: 100,
-        entryAlphaThreshold: 0.3,
-        clusterPoolMultiplier: 3,
-        topKeyCandidates: 5,
-        extraHops: 0
+    return PaperRuntime(artifact, vectormap, flatItems, buildConfig, searchConfig)
+}
+
+func buildPaperRuntime(filePath: String): PaperRuntime {
+    return buildPaperRuntimeWithConfig(
+        filePath, defaultPaperBuildConfig(), defaultPaperSearchConfig()
     )
-    return PaperRuntime(artifact, vectormap, flatItems, searchConfig)
 }
 
 func evaluatePaperBeta(runtime: PaperRuntime, maxQueries: Int64, beta: Float64):
@@ -479,7 +494,7 @@ func paperSummaryLine(runtime: PaperRuntime, stats: BetaEvalStats,
     } else {
         "debug-subset"
     }
-    return "PAPER_SUMMARY|protocol=${artifact.protocol}|evaluationProtocol=violas-paper-table2-v5|queryScope=${queryScope}|implementation=normalized-f64-o2|ndcgGain=mixed-score-graded|withoutHdmgMethod=entity-route-plus-local-microcluster-scan|withoutHdmgGroupBudget=${runtime.searchConfig.topKeyCandidates}|withoutHdmgMicroClusterBudget=${artifact.topK * runtime.searchConfig.clusterPoolMultiplier}|dataset=${artifact.dataset}|training=${artifact.records.size}|queries=${count}|beta=${beta}|mixedRecall=${stats.mixed.avg()}|mixedNdcg=${stats.mixed.avgNdcg()}|mixedMin=${stats.mixed.minVal()}|mixedMax=${stats.mixed.maxVal()}|withoutHdmgRecall=${stats.withoutHdmg.avg()}|withoutHdmgNdcg=${stats.withoutHdmg.avgNdcg()}|withoutHdmgMin=${stats.withoutHdmg.minVal()}|withoutHdmgMax=${stats.withoutHdmg.maxVal()}|representativeRecall=${stats.representative.avg()}|representativeNdcg=${stats.representative.avgNdcg()}|representativeMin=${stats.representative.minVal()}|representativeMax=${stats.representative.maxVal()}|pythonFlatRecall=${stats.pyflat.avg()}|pythonFlatNdcg=${stats.pyflat.avgNdcg()}|mixedLatencyMs=${stats.mixed.avgLatencyMs()}|withoutHdmgLatencyMs=${stats.withoutHdmg.avgLatencyMs()}|representativeLatencyMs=${stats.representative.avgLatencyMs()}|pythonFlatLatencyMs=${stats.pyflat.avgLatencyMs()}|groundTruthLatencyMs=${groundTruthStats.avgLatencyMs()}|hdmgHops=${stats.hdmgTrace.avgHops()}|hdmgDepth=${stats.hdmgTrace.avgDepth()}|hdmgCandidatePool=${stats.hdmgTrace.avgCandidatePool()}|hdmgEntryMs=${stats.hdmgTrace.avgEntryMs()}|hdmgWalkMs=${stats.hdmgTrace.avgWalkMs()}|hdmgRerankMs=${stats.hdmgTrace.avgRerankMs()}"
+    return "PAPER_SUMMARY|protocol=${artifact.protocol}|evaluationProtocol=violas-paper-table2-v5|queryScope=${queryScope}|implementation=normalized-f64-o2|ndcgGain=mixed-score-graded|embeddingK=${runtime.buildConfig.embeddingK}|semanticIntraK=${runtime.buildConfig.semanticIntraK}|semanticBridgeKeys=${runtime.buildConfig.semanticBridgeKeys}|semanticBridgePerKey=${runtime.buildConfig.semanticBridgePerKey}|useMutualEmbedding=${runtime.buildConfig.useMutualEmbedding}|clusterPoolMultiplier=${runtime.searchConfig.clusterPoolMultiplier}|topKeyCandidates=${runtime.searchConfig.topKeyCandidates}|maxSteps=${runtime.searchConfig.maxSteps}|extraHops=${runtime.searchConfig.extraHops}|withoutHdmgMethod=entity-route-plus-local-microcluster-scan|withoutHdmgGroupBudget=${runtime.searchConfig.topKeyCandidates}|withoutHdmgMicroClusterBudget=${artifact.topK * runtime.searchConfig.clusterPoolMultiplier}|dataset=${artifact.dataset}|training=${artifact.records.size}|queries=${count}|beta=${beta}|mixedRecall=${stats.mixed.avg()}|mixedNdcg=${stats.mixed.avgNdcg()}|mixedMin=${stats.mixed.minVal()}|mixedMax=${stats.mixed.maxVal()}|withoutHdmgRecall=${stats.withoutHdmg.avg()}|withoutHdmgNdcg=${stats.withoutHdmg.avgNdcg()}|withoutHdmgMin=${stats.withoutHdmg.minVal()}|withoutHdmgMax=${stats.withoutHdmg.maxVal()}|representativeRecall=${stats.representative.avg()}|representativeNdcg=${stats.representative.avgNdcg()}|representativeMin=${stats.representative.minVal()}|representativeMax=${stats.representative.maxVal()}|pythonFlatRecall=${stats.pyflat.avg()}|pythonFlatNdcg=${stats.pyflat.avgNdcg()}|mixedLatencyMs=${stats.mixed.avgLatencyMs()}|withoutHdmgLatencyMs=${stats.withoutHdmg.avgLatencyMs()}|representativeLatencyMs=${stats.representative.avgLatencyMs()}|pythonFlatLatencyMs=${stats.pyflat.avgLatencyMs()}|groundTruthLatencyMs=${groundTruthStats.avgLatencyMs()}|hdmgHops=${stats.hdmgTrace.avgHops()}|hdmgDepth=${stats.hdmgTrace.avgDepth()}|hdmgCandidatePool=${stats.hdmgTrace.avgCandidatePool()}|hdmgEntryMs=${stats.hdmgTrace.avgEntryMs()}|hdmgWalkMs=${stats.hdmgTrace.avgWalkMs()}|hdmgRerankMs=${stats.hdmgTrace.avgRerankMs()}"
 }
 
 func printAndPersistPaperSummary(runtime: PaperRuntime, stats: BetaEvalStats,
@@ -533,6 +548,43 @@ public func runPaperArtifact(filePath: String, maxQueries: Int64, beta: Float64,
     }
     if (!summaryPath.isEmpty()) { File.writeTo(summaryPath, "".toArray()) }
     let runtime = buildPaperRuntime(filePath)
+    let queryLimit = if (maxQueries == 0) { runtime.artifact.queries.size } else { maxQueries }
+    let (stats, groundTruthStats, count) = evaluatePaperBeta(runtime, queryLimit, beta)
+    printAndPersistPaperSummary(runtime, stats, groundTruthStats, count, summaryPath)
+}
+
+public func runPaperArtifactConfigured(
+    filePath: String,
+    maxQueries: Int64,
+    beta: Float64,
+    embeddingK: Int64,
+    semanticIntraK: Int64,
+    semanticBridgeKeys: Int64,
+    semanticBridgePerKey: Int64,
+    clusterPoolMultiplier: Int64,
+    topKeyCandidates: Int64,
+    summaryPath!: String = ""
+): Unit {
+    if (maxQueries < 0 || beta < 0.0 || beta > 1.0) {
+        throw IllegalArgumentException("paper-config maxQueries must be non-negative and beta must be in [0,1]")
+    }
+    if (!summaryPath.isEmpty()) { File.writeTo(summaryPath, "".toArray()) }
+    let buildConfig = HdmgBuildConfig(
+        embeddingK: embeddingK,
+        semanticIntraK: semanticIntraK,
+        semanticBridgeKeys: semanticBridgeKeys,
+        semanticBridgePerKey: semanticBridgePerKey,
+        useMutualEmbedding: false,
+        assumeNormalized: true
+    )
+    let searchConfig = HdmgSearchConfig(
+        maxSteps: 100,
+        entryAlphaThreshold: 0.3,
+        clusterPoolMultiplier: clusterPoolMultiplier,
+        topKeyCandidates: topKeyCandidates,
+        extraHops: 0
+    )
+    let runtime = buildPaperRuntimeWithConfig(filePath, buildConfig, searchConfig)
     let queryLimit = if (maxQueries == 0) { runtime.artifact.queries.size } else { maxQueries }
     let (stats, groundTruthStats, count) = evaluatePaperBeta(runtime, queryLimit, beta)
     printAndPersistPaperSummary(runtime, stats, groundTruthStats, count, summaryPath)

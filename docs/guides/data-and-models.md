@@ -54,5 +54,6 @@ python tools\verify_shared_artifact.py --help
 ## 注意
 
 - 仓颉、Faiss、Milvus、Qdrant 和 Chroma 应读取同一份冻结 artifact，不能各自重新划分数据；
-- `results/` 中的文件是实验产物，不应提交到 Git；
+- `results/` 中的大型原始实验产物不提交到 Git；经校验的精选指标保存在
+  `results-summary/`；
 - `violas_python/` 只作为只读参考，不应修改或提交。

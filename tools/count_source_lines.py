@@ -73,8 +73,15 @@ def source_line_count(path: Path) -> tuple[int, int, int]:
     return physical, non_empty, source
 
 
-def collect(root: Path, relative: str, extensions: set[str],
-            tracked: set[Path] | None, excludes: tuple[str, ...] = ()) -> dict:
+def collect(
+    root: Path,
+    relative: str,
+    extensions: set[str],
+    tracked: set[Path] | None,
+    excludes: tuple[str, ...] = (),
+    include_name_suffixes: tuple[str, ...] = (),
+    exclude_name_suffixes: tuple[str, ...] = (),
+) -> dict:
     base = (root / relative).resolve()
     files = []
     if base.exists():
@@ -83,6 +90,9 @@ def collect(root: Path, relative: str, extensions: set[str],
             rel = resolved.relative_to(root.resolve()).as_posix()
             if (path.is_file() and path.suffix.lower() in extensions
                     and not any(rel.startswith(prefix) for prefix in excludes)
+                    and (not include_name_suffixes
+                         or path.name.endswith(include_name_suffixes))
+                    and not path.name.endswith(exclude_name_suffixes)
                     and (tracked is None or resolved in tracked)):
                 files.append(resolved)
     totals = [0, 0, 0]
@@ -108,9 +118,28 @@ def main() -> int:
 
     repo_tracked = None if args.include_untracked else tracked_files(ROOT)
     scopes = {
-        "Cangjie storage core": collect(ROOT, "cj_core/src/storage", {".cj"}, repo_tracked),
+        "Cangjie storage core": collect(
+            ROOT,
+            "cj_core/src/storage",
+            {".cj"},
+            repo_tracked,
+            exclude_name_suffixes=("_test.cj",),
+        ),
         "Cangjie benchmark": collect(ROOT, "cj_core/src/bench", {".cj"}, repo_tracked),
-        "Cangjie all src": collect(ROOT, "cj_core/src", {".cj"}, repo_tracked),
+        "Cangjie all production src": collect(
+            ROOT,
+            "cj_core/src",
+            {".cj"},
+            repo_tracked,
+            exclude_name_suffixes=("_test.cj",),
+        ),
+        "Cangjie tests": collect(
+            ROOT,
+            "cj_core/src",
+            {".cj"},
+            repo_tracked,
+            include_name_suffixes=("_test.cj",),
+        ),
         "Python Violas core": collect(ROOT, "violas_python/violas", {".py"}, repo_tracked),
         "Python benchmarks": collect(ROOT, "violas_python/benchmarks", {".py"}, repo_tracked),
         "Repository benchmark tools": collect(ROOT, "tools", {".py", ".ps1"}, repo_tracked),
@@ -139,7 +168,10 @@ def main() -> int:
             "physicalLines": "all text lines",
             "nonEmptyLines": "trimmed line is non-empty",
             "sourceLines": "non-empty after removing comment-only content",
-            "exclusions": "datasets, artifacts, results, docs, build output and dependencies",
+            "exclusions": (
+                "datasets, artifacts, results, docs, build output and dependencies; "
+                "production and test scopes are reported separately"
+            ),
             "warning": "LOC describes implementation scope, not speed, correctness or quality",
         },
         "repository": {"path": str(ROOT), "gitCommit": git_commit(ROOT)},

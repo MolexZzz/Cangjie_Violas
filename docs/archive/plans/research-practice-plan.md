@@ -1,4 +1,6 @@
-# Violas 两周科研实践计划（2026-07-20 ～ 2026-07-30）
+# 历史计划：Violas 科研实践
+
+> 本文是开发阶段记录，不属于发布说明；当前结论以正式文档和冻结结果为准。
 
 详细现状证据、接口差异、数据集完整性和横向数据库审计见
 [`interface-data-benchmark-audit.md`](../reports/interface-data-benchmark-audit.md)。本计划中的分工与验收应以该审计结论为准。

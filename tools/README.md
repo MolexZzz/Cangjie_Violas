@@ -7,6 +7,7 @@
 | `run_image_full_suite.ps1` | 分数据集运行仓颉 Violas 与外部数据库完整实验 |
 | `run_faiss_and_maintenance.ps1` | 运行 Faiss、维护实验和 LOC 统计 |
 | `run_cangjie_benchmark.py` | 从 Python 侧驱动仓颉 Benchmark |
+| `run_accuracy_parameter_scan.py` | 在冻结三图像数据上扫描 HDMG 准确率—延迟参数 |
 
 ## 数据与冻结输入
 
@@ -33,6 +34,7 @@
 | `compare_sample_queries.py` | 小样例结果对照 |
 | `verify_representative_alignment.py` | Representative 路径检查 |
 | `diagnose_paper_ndcg.py` | NDCG 口径诊断 |
+| `verify_release_bundle.py` | 校验 Git 跟踪的精选结果与 release artifact 清单 |
 
 ## 汇总
 

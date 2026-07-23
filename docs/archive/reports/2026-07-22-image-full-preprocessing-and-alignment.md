@@ -1,4 +1,6 @@
-# 2026-07-22 上午：图像 full 数据、Embedding 与论文配置对齐说明
+# 历史报告：图像完整数据、Embedding 与论文配置对齐
+
+> 本文保留实验演进过程；发布结论以 `docs/experiments.md` 和 `results-summary/` 为准。
 
 ## 1. 文档结论
 

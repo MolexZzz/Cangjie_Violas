@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "protocol": "python-paper-90-10",
+  "embedding": "CLIP ViT-B/32",
+  "dimension": 512,
+  "splitSeed": 42,
+  "artifacts": [
+    {
+      "dataset": "caltech",
+      "path": "artifacts/python-paper-90-10/caltech-full/cangjie_input.txt",
+      "bytes": 103090597,
+      "sha256": "d27a8011adfc930f53273ad4dc4fac9a1c6ac7da1bd37d251eac649a59bdd8bb",
+      "training": 7766,
+      "queries": 911
+    },
+    {
+      "dataset": "cub",
+      "path": "artifacts/python-paper-90-10/cub-full/cangjie_input.txt",
+      "bytes": 140995505,
+      "sha256": "db3d8c1a0ca3d0d24acf360e35d804b01334f64483dcebb65f01b91b838837e1",
+      "training": 10597,
+      "queries": 1191
+    },
+    {
+      "dataset": "coco",
+      "path": "artifacts/python-paper-90-10/coco-full/cangjie_input.txt",
+      "bytes": 118020731,
+      "sha256": "78b150e46eb0a5218f56a9edda5d147a80310b04ab6758a3c14de820dfe8e402",
+      "training": 8967,
+      "queries": 1033
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+name: quality
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Compile Python tools
+        run: python -m compileall -q tools photo-data
+      - name: Validate frozen release bundle
+        run: python tools/verify_release_bundle.py

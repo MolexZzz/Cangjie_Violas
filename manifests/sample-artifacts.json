@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "manifestPurpose": "legacy sample artifacts for local regression",
   "datasets": [
     {
       "dataset": "news20",

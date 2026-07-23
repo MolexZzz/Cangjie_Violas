@@ -13,6 +13,7 @@ main() {
     println("  parity <1..6> <maxQueries> <beta> = 真实样例逐 query 对照输出")
     println("  dbbench <mock|milvus|qdrant|chroma> <1..6> <smoke|partial|full> = 外部数据库评测")
     println("  paper <cangjie_input.txt> <maxQueries> <beta|all> = 冻结 90/10 artifact 评测")
+    println("  paper-config <input> <maxQueries> <beta> <embeddingK> <semanticIntraK> <bridgeKeys> <bridgePerKey> <poolMultiplier> <topKeys> [summary.log]")
     println("  maintenance <cangjie_input.txt> <count> [summary.log] = 对象与 HDMG 维护评测")
     print("请选择: ")
     let choice = readln()
@@ -51,6 +52,25 @@ main() {
         } else {
             runPaperArtifact(parts[1], Int64.parse(parts[2]), Float64.parse(parts[3]), summaryPath: summaryPath)
         }
+    } else if (choice.startsWith("paper-config ")) {
+        let parts = choice.split(" ")
+        if (parts.size != 10 && parts.size != 11) {
+            throw IllegalArgumentException(
+                "用法: paper-config <input> <maxQueries> <beta> <embeddingK> <semanticIntraK> <bridgeKeys> <bridgePerKey> <poolMultiplier> <topKeys> [summary.log]"
+            )
+        }
+        runPaperArtifactConfigured(
+            parts[1],
+            Int64.parse(parts[2]),
+            Float64.parse(parts[3]),
+            Int64.parse(parts[4]),
+            Int64.parse(parts[5]),
+            Int64.parse(parts[6]),
+            Int64.parse(parts[7]),
+            Int64.parse(parts[8]),
+            Int64.parse(parts[9]),
+            summaryPath: if (parts.size == 11) { parts[10] } else { "" }
+        )
     } else if (choice.startsWith("maintenance ")) {
         let parts = choice.split(" ")
         if (parts.size != 3 && parts.size != 4) {

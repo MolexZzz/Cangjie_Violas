@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "release": "cangjie-violas-research-preview",
+  "protocol": "violas-paper-table2-v5",
+  "queryScope": "full-10-percent-test-pool",
+  "beta": 0.5,
+  "datasets": [
+    {
+      "name": "caltech",
+      "training": 7766,
+      "queries": 911,
+      "mixedRecallAt3": 0.998536,
+      "mixedNdcgAt3": 0.999994,
+      "latencyMsPerQuery": 1.085818,
+      "withoutHdmgRecallAt3": 0.998536
+    },
+    {
+      "name": "cub",
+      "training": 10597,
+      "queries": 1191,
+      "mixedRecallAt3": 1.0,
+      "mixedNdcgAt3": 1.0,
+      "latencyMsPerQuery": 1.421441,
+      "withoutHdmgRecallAt3": 1.0
+    },
+    {
+      "name": "coco",
+      "training": 8967,
+      "queries": 1033,
+      "mixedRecallAt3": 0.99645,
+      "mixedNdcgAt3": 0.999944,
+      "latencyMsPerQuery": 0.90435,
+      "withoutHdmgRecallAt3": 0.995482
+    }
+  ],
+  "threeDatasetAverage": {
+    "mixedRecallAt3": 0.9983286667,
+    "mixedNdcgAt3": 0.9999793333,
+    "latencyMsPerQuery": 1.137203,
+    "withoutHdmgRecallAt3": 0.998006
+  },
+  "performanceOptimization": {
+    "dataset": "caltech",
+    "queryLatencyBeforeMs": 76.5,
+    "queryLatencyAfterMs": 1.25,
+    "querySpeedup": 61.4,
+    "buildBeforeSeconds": 77.6,
+    "buildAfterSeconds": 0.91,
+    "buildSpeedupApprox": 85.0,
+    "recallPreserved": true
+  },
+  "sourceLines": {
+    "rule": "non-empty lines after removing comment-only content",
+    "cangjieProduction": 4504,
+    "cangjieStorageCore": 1964,
+    "cangjieTests": 165,
+    "faissCpuLibrary": 95298,
+    "faissCpuAndGpu": 132769,
+    "faissCommit": "7d4bb39f7eb3e9bb4d160aa38ec821ee1a407afc"
+  },
+  "sourceArtifacts": {
+    "fullSummarySha256": "51a1effb0aee6498275b8bea781308f73e93400ec411bd79b56baeea49f52c09",
+    "faissComparisonSha256": "9416018c552c72c1d97cb658a448c399b2cb9d7354c5287a9f317b6d1f5d417d"
+  },
+  "runCommit": "44e14ef10a9380de9011d5b46b9bedfad9bb093f",
+  "notes": [
+    "Results cover three image datasets, not the paper's six-dataset average.",
+    "Database latency was measured through local Docker services.",
+    "Faiss and Violas use different retrieval objectives."
+  ]
+}

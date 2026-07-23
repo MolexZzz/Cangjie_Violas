@@ -74,6 +74,13 @@ public class VectorGroup {
         if (representative.size != vectors[0].size) { 
             throw Exception("初始化失败：代表向量的维度 (${representative.size}) 与组内向量的维度 (${vectors[0].size}) 不匹配。") 
         }
+        for (i in 0..vectors.size) {
+            if (vectors[i].size != representative.size) {
+                throw Exception(
+                    "初始化失败：第 ${i} 个向量的维度 (${vectors[i].size}) 与代表向量维度 (${representative.size}) 不匹配。"
+                )
+            }
+        }
 
         // 2. 赋值基础字段
         this.groupName = groupName
