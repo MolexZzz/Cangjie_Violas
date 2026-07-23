@@ -327,7 +327,7 @@ def markdown(payload: dict) -> str:
         "- Faiss 插入使用原生 `add`；通用更新和删除采用完整重建，因为 HNSW 不支持通用原位删除。",
         "- 仓颉 Violas 使用稳定 record ID 完成对象插入、原位更新和删除；每批变更后完整重建 HDMG。",
         "- Milvus、Qdrant、Chroma 的同步 upsert 已包含服务端可见的数据与索引维护；"
-        "由于开源代码没有公开 Table 3 的独立 index-update 操作边界，这一列暂记 `N/A`，不重复抄写 update 时间。",
+        "外部数据库没有独立的 index-update 计时边界，因此该项记为 `N/A`，不重复使用 vector update 时间。",
         "- 数据库的 initial build 包含建集合和初始数据写入，不能与 Faiss 的纯内存索引构建时间直接等同。",
         "",
     ])

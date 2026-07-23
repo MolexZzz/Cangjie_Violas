@@ -62,6 +62,7 @@ cj_core/          仓颉实现与测试
 tools/            数据处理和实验脚本
 manifests/        实验输入清单
 results-summary/  汇总结果
+tests/fixtures/   小型一致性测试数据
 docs/             设计与复现文档
 ```
 
@@ -76,4 +77,6 @@ docs/             设计与复现文档
 
 ## 许可
 
-本项目以 [MIT License](LICENSE) 发布。
+本项目自行编写的仓颉实现以 [MIT License](LICENSE) 发布。项目设计和一致性测试参考了采用
+Apache License 2.0 的 [DoubleNorth/Violas](https://github.com/DoubleNorth/Violas)；
+来源及第三方许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

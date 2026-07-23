@@ -13,6 +13,6 @@ jobs:
         with:
           python-version: "3.13"
       - name: Compile Python tools
-        run: python -m compileall -q tools photo-data
+        run: python -m compileall -q tools
       - name: Validate frozen release bundle
         run: python tools/verify_release_bundle.py

@@ -22,7 +22,6 @@ violas_python/                 Python 参考实现
 
 ```powershell
 python tools\download_image_datasets.py --help
-python photo-data\download_coco_dataset.py --help
 python tools\paper_artifact.py --help
 python tools\verify_shared_artifact.py --help
 ```

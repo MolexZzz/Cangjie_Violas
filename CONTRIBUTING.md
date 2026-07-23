@@ -11,7 +11,7 @@ cjpm build
 cjpm test --no-color
 "2" | cjpm run
 cd ..
-python -m compileall -q tools photo-data
+python -m compileall -q tools
 python tools\verify_release_bundle.py
 ```
 

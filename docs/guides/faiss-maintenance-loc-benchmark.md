@@ -45,7 +45,7 @@ Faiss 的通用更新和删除按完整重建计时；Milvus、Qdrant 和 Chroma
 
 ```powershell
 python tools\count_source_lines.py `
-  --faiss-root D:\source\faiss `
+  --faiss-root <path-to-faiss> `
   --output results\faiss-and-maintenance\source-lines.json
 ```
 

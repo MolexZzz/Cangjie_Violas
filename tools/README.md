@@ -30,10 +30,7 @@
 
 | 工具 | 用途 |
 | --- | --- |
-| `compare_python_cangjie.py` | Python—仓颉逐查询对照 |
-| `compare_sample_queries.py` | 小样例结果对照 |
-| `verify_representative_alignment.py` | Representative 路径检查 |
-| `diagnose_paper_ndcg.py` | NDCG 口径诊断 |
+| `compare_python_cangjie.py` | 使用本地 Violas Python 参考实现进行仓颉一致性检查 |
 | `verify_release_bundle.py` | 校验 Git 跟踪的精选结果与 release artifact 清单 |
 
 ## 汇总

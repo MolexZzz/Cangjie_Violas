@@ -4,13 +4,10 @@
 **/.git.upstream/
 
 # Datasets and generated benchmark artifacts
-/dataset/*
-!/dataset/.gitkeep
-/model/*
-!/model/.gitkeep
+/dataset/
+/model/
 /violas_python/
-/photo-data/images/
-/photo-data/*.json
+/photo-data/
 /artifacts/
 /results/
 **/data/

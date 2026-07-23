@@ -12,5 +12,3 @@
 - [90/10 实验协议](guides/python-paper-90-10-protocol.md)
 - [外部数据库实验](guides/external-database-benchmark.md)
 - [Faiss 对比、维护实验与代码量统计](guides/faiss-maintenance-loc-benchmark.md)
-
-开发过程中的计划和阶段报告保存在 `archive/`，不作为最终实验结论。

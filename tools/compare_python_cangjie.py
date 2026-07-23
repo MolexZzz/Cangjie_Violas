@@ -95,7 +95,7 @@ def main() -> None:
     parser.add_argument(
         "--output",
         type=Path,
-        default=ROOT / "manifests" / "python-cangjie-fixture.json",
+        default=ROOT / "tests" / "fixtures" / "python-cangjie-parity.json",
     )
     args = parser.parse_args()
 
