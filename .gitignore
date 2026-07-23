@@ -8,6 +8,7 @@
 !/dataset/.gitkeep
 /model/*
 !/model/.gitkeep
+/violas_python/
 /photo-data/images/
 /photo-data/*.json
 /artifacts/
