@@ -35,8 +35,8 @@ cjpm build
 cjpm test --no-color
 ```
 
-`storage_test.cj` 使用仓颉标准 `unittest`，覆盖 mixed score、向量数学、`VectorGroup` CRUD 与
-输入校验、索引生命周期、HDMG fallback、稳定排序和非法配置。
+`storage_test.cj` 使用仓颉标准 `unittest`，覆盖 mixed score、向量运算、`VectorGroup` CRUD、
+输入校验、索引生命周期、HDMG 回退、稳定排序和非法配置。
 
 核心集成回归：
 
@@ -56,11 +56,11 @@ paper <cangjie_input.txt> <maxQueries> <beta|all>
 maintenance <cangjie_input.txt> <count> [summary.log]
 ```
 
-正式图像实验通常不直接手输这些命令，而是使用根目录 `tools/run_image_full_suite.ps1`。
+完整图像实验由根目录的 `tools/run_image_full_suite.ps1` 调用。
 
 ## 实现边界
 
 - 当前存储与 HDMG 核心使用 `Float64`；
 - HDMG 是实际图索引；
-- rep/single 当前仍是 exact-scan snapshot，不能称为真实 ANN；
+- `rep` 和 `single` 当前仍是 exact-scan snapshot，不是 ANN 索引；
 - 数据插入、更新或删除后，旧索引会失效，需重建后再作为当前索引使用。

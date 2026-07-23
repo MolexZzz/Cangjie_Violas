@@ -1,20 +1,20 @@
 # 工具导航
 
-## 正式运行入口
+## 实验入口
 
 | 工具 | 用途 |
 | --- | --- |
 | `run_image_full_suite.ps1` | 分数据集运行仓颉 Violas 与外部数据库完整实验 |
 | `run_faiss_and_maintenance.ps1` | 运行 Faiss、维护实验和 LOC 统计 |
 | `run_cangjie_benchmark.py` | 从 Python 侧驱动仓颉 Benchmark |
-| `run_accuracy_parameter_scan.py` | 在冻结三图像数据上扫描 HDMG 准确率—延迟参数 |
+| `run_accuracy_parameter_scan.py` | 在三图像数据上扫描 HDMG 准确率—延迟参数 |
 
-## 数据与冻结输入
+## 数据与实验输入
 
 | 工具 | 用途 |
 | --- | --- |
 | `download_image_datasets.py` | 下载/整理图像数据 |
-| `paper_artifact.py` | 生成 `python-paper-90-10` 冻结输入 |
+| `paper_artifact.py` | 生成 `python-paper-90-10` 实验输入 |
 | `precomputed_artifacts.py` | 读取旧版预计算输入 |
 | `verify_shared_artifact.py` | 校验不同后端是否共享相同输入 |
 
@@ -43,7 +43,6 @@
 | `summarize_image_full_results.py` | 单数据集实验汇总 |
 | `summarize_image_paper_average.py` | 三图像数据集平均表 |
 | `summarize_cangjie_faiss_comparison.py` | 仓颉—Faiss 功能、LOC、性能对比 |
-| `summarize_maintenance_table3.py` | Table 3 风格维护实验汇总 |
 | `count_source_lines.py` | 基于 Git 已跟踪文件统计源码行数 |
 
-所有正式实验输出应写入 `results/`，不要写回 `tools/` 或仓颉源码目录。
+实验输出应写入 `results/`，不要写回 `tools/` 或仓颉源码目录。

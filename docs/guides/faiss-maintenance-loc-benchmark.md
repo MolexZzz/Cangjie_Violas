@@ -1,50 +1,28 @@
-# Faiss、数据维护与代码量对比
+# Faiss 基线、维护基准与代码量统计
 
-本工具组直接读取 `python-paper-90-10` 冻结实验包，不重新生成 embedding，也不重新划分
-训练集和查询集。所有 JSON、Markdown 和日志应保存在已被 `.gitignore` 排除的 `results/` 中。
+本组工具读取 `python-paper-90-10` 实验输入，不重新生成 embedding 或划分数据。原始输出
+写入已被 `.gitignore` 排除的 `results/`。
 
-## 1. Faiss 检索基线
+## Faiss 基线
 
-实现位于 `tools/run_faiss_baseline.py`，包括：
-
-- `IndexFlatIP`：精确 cosine/IP 基线，用于检查输入和 ground truth；
-- `IndexIVFFlat`：倒排近似索引，记录 `nlist` 和 `nprobe`；
-- `IndexHNSWFlat`：图近似索引，记录 `M`、`efConstruction` 和 `efSearch`；
-- Recall@3、集合相关性 NDCG@3、构建时间、Mean/P50/P95 latency；
-- 序列化索引大小和进程 Peak RSS；
-- Git commit、Faiss/NumPy 版本和操作系统。
-
-该实验是单向量 cosine 检索，不包含 Violas 的类别语义距离或 mixed score。因此它是底层向量
-索引基线，不应与完整 Violas 的功能范围混为一谈。
-
-单数据集调试：
+`tools/run_faiss_baseline.py` 运行 `IndexFlatIP`、`IndexIVFFlat` 和 `IndexHNSWFlat`，
+记录 Recall@3、NDCG@3、构建时间、查询延迟、索引大小与进程峰值内存。
 
 ```powershell
 python tools\run_faiss_baseline.py `
   --artifact artifacts\python-paper-90-10\caltech-full `
-  --max-queries 20 `
-  --repeats 1 `
-  --output results\faiss-and-maintenance\faiss-caltech-smoke.json
+  --max-queries 0 `
+  --repeats 3 `
+  --output results\faiss-and-maintenance\faiss-caltech.json
 ```
 
-正式运行时将 `--max-queries` 设为 `0`，使用完整 10% 查询池。
+该基线只计算 embedding cosine，相应真值也由精确 embedding 检索生成。它与 Violas 的
+mixed search 目标不同。
 
-## 2. 数据与索引维护
+## 维护基准
 
-`tools/run_maintenance_benchmark.py` 默认固定处理 200 个向量，先预热 1 轮，再正式重复 3 轮，
-记录整批插入、更新、删除、初始构建和索引更新耗时。它不会修改冻结 artifact：
-
-- 插入数据来自冻结的 10% 查询池；
-- 更新数据是训练向量的确定性副本；
-- 删除对象是本轮插入的对象；
-- Faiss 原生支持 `add`，但为了兼容 HNSW，通用更新和删除统一按完整重建统计；
-- Milvus、Qdrant 和 Chroma 使用稳定 record ID 执行 upsert/delete；
-- 开源 Violas 没有发布论文 Table 3 的独立计时脚本，因此外部数据库 `index update`
-  暂记为 `N/A`，不会再把 vector update 时间重复填入该列；
-- JSON 保存每轮原始样本、均值、样本标准差、最小值和最大值；
-- `--resume` 会跳过已经写入 checkpoint 的后端，单个数据库失败不会丢失前面已完成的结果。
-
-只验证 Faiss：
+`tools/run_maintenance_benchmark.py` 测量固定批量的插入、更新、删除和索引重建。默认先预热
+一次，再重复三次，并保存每轮数据。输入文件不会被修改。
 
 ```powershell
 python tools\run_maintenance_benchmark.py `
@@ -56,48 +34,14 @@ python tools\run_maintenance_benchmark.py `
   --output results\faiss-and-maintenance\maintenance-caltech.json
 ```
 
-Docker 服务启动后加入三个数据库：
+Faiss 的通用更新和删除按完整重建计时；Milvus、Qdrant 和 Chroma 使用稳定 record ID
+执行 upsert 与 delete。仓颉在对象变化后将旧 HDMG 标记为失效，并单独记录对象操作和重建时间。
+这些数据作为工程诊断保存在本地，不列入项目汇总结果。
 
-```powershell
-python tools\run_maintenance_benchmark.py `
-  --artifact artifacts\python-paper-90-10\caltech-full `
-  --mutation-count 200 `
-  --backends faiss,milvus,qdrant,chroma `
-  --execution-mode service `
-  --repeats 3 `
-  --warmup-runs 1 `
-  --resume `
-  --output results\faiss-and-maintenance\maintenance-caltech-all.json
-```
+## 代码量
 
-仓颉侧已经增加按稳定 `recordId` 执行的对象插入、原位向量更新和删除接口。每次成功变更都会
-使旧 HDMG 失效；维护 benchmark 在一批操作结束后完整重建 HDMG，并分别保存对象操作时间和
-索引重建时间。这样不会把“更新数据”和“更新索引”混成一个数字。
-
-论文 Table 3 本身不含删除列。删除实验属于本项目增加的工程维护指标，汇总时放在辅助表。
-
-三个数据集完成后生成主表：
-
-```powershell
-python tools\summarize_maintenance_table3.py `
-  --inputs results\faiss-and-maintenance\table3\maintenance-caltech.json `
-           results\faiss-and-maintenance\table3\maintenance-cub.json `
-           results\faiss-and-maintenance\table3\maintenance-coco.json `
-  --output results\faiss-and-maintenance\table3\table3-image-summary.md
-```
-
-## 3. 代码行数
-
-`tools/count_source_lines.py` 默认只统计 Git 已跟踪文件，同时给出物理行、非空行和排除纯注释后的
-源码行。数据、文档、构建产物、结果和第三方依赖不计入。
-
-只统计当前仓库：
-
-```powershell
-python tools\count_source_lines.py
-```
-
-如果本地已有 Faiss 官方源码 checkout：
+`tools/count_source_lines.py` 默认统计 Git 已跟踪源码，分别给出物理行、非空行和去除纯注释后的
+源码行。数据、文档、构建产物、实验输出和第三方依赖不计入。
 
 ```powershell
 python tools\count_source_lines.py `
@@ -105,43 +49,19 @@ python tools\count_source_lines.py `
   --output results\faiss-and-maintenance\source-lines.json
 ```
 
-正式报告必须同时保存 Faiss commit。代码行数只能说明工程规模，不能直接说明速度、正确性或
-代码质量。
+报告 Faiss 数据时必须同时记录其 commit。跨语言的代码行数只能说明选定模块的规模，不表示
+算法复杂度、性能或代码质量。
 
-使用 LOC、三份 Faiss JSON 和 Table 2 汇总生成正式功能/规模/性能对比：
-
-```powershell
-python tools\summarize_cangjie_faiss_comparison.py `
-  --loc results\faiss-and-maintenance\source-lines.json `
-  --faiss results\faiss-and-maintenance\faiss-caltech.json `
-          results\faiss-and-maintenance\faiss-cub.json `
-          results\faiss-and-maintenance\faiss-coco.json `
-  --table2 results\python-paper-90-10\average-paper-table.json `
-  --output results\faiss-and-maintenance\cangjie-faiss-comparison.md
-```
-
-## 4. 标准仓颉测试
-
-核心数学、mixed score、key 处理以及 `VectorGroup` CRUD 已纳入仓颉标准 `unittest`：
-
-```powershell
-cd cj_core
-cjpm test --no-color --report-path test-report --report-format xml
-```
-
-测试报告是生成物，不提交 Git。菜单入口 `2` 的端到端核心回归仍保留，两者分别承担单元测试和
-集成回归职责。
-
-## 5. 三数据集统一入口
+## 批量运行
 
 ```powershell
 .\tools\run_faiss_and_maintenance.ps1 `
   -Datasets caltech,cub,coco `
-  -RunRoot "results/faiss-and-maintenance/2026-07-23" `
+  -RunRoot "results/faiss-and-maintenance/reproduction" `
   -MaxQueries 0 `
   -MutationCount 200 `
   -MaintenanceBackends "cangjie,faiss"
 ```
 
-确认仓颉与 Faiss 结果正常后，再把 `MaintenanceBackends` 改成
-`cangjie,faiss,milvus,qdrant,chroma`。所有输出都会持久化到指定 `RunRoot`。
+数据库服务就绪后，可将 `MaintenanceBackends` 扩展为
+`cangjie,faiss,milvus,qdrant,chroma`。

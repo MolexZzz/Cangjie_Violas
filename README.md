@@ -1,20 +1,11 @@
 # Cangjie Violas
 
-Violas 的仓颉实现，面向语义类别距离与图像向量距离的联合检索。项目实现了 VectorMap、
-微簇、HDMG 图索引和 Mixed Search，并提供可复现的全量图像基准测试工具。
+本项目使用仓颉实现 Violas 的主要数据结构与检索流程，用于研究同时考虑语义距离和
+向量距离的近邻检索。仓颉核心包括 `VectorMap`、微簇组织、HDMG 图索引和 Mixed Search；
+Python 工具负责数据预处理、基准测试与结果校验。
 
-## 主要特性
-
-- 使用仓颉实现向量存储、自动聚类、对象维护和检索；
-- 使用 HDMG 在微簇图上获取候选并按 mixed score 重排；
-- 支持 Caltech-101、CUB-200-2011 和 COCO 的冻结 90/10 实验协议；
-- 提供 Faiss、Milvus、Qdrant 和 Chroma 对比工具；
-- 输出 Recall@3、NDCG@3、查询延迟、构建时间和维护开销；
-- 保存数据哈希、参数、Git commit 和运行环境等复现信息。
-
-## 已验证结果
-
-三套图像数据均已完成完整 10% 查询池评测。β=0.5 时：
+项目目前在 Caltech-101、CUB-200-2011 和 COCO 三个图像数据集上完成了 90% 建库、
+10% 查询的实验。图像和类别文本均使用 CLIP ViT-B/32 编码。β=0.5 时的结果如下：
 
 | 数据集 | 训练向量 | 查询向量 | Recall@3 | NDCG@3 | 延迟（ms/query） |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -22,11 +13,12 @@ Violas 的仓颉实现，面向语义类别距离与图像向量距离的联合�
 | CUB-200-2011 | 10,597 | 1,191 | 1.000000 | 1.000000 | 1.421 |
 | COCO | 8,967 | 1,033 | 0.996450 | 0.999944 | 0.904 |
 
-完整的冻结结果、Faiss 对比和参数扫描见 [results-summary](results-summary/README.md)。
+完整结果及其适用范围见 [实验结果](results-summary/README.md)。这些数据只反映本仓库所采用的
+三数据集实验协议，不等同于原论文的六数据集结果。
 
-## 快速开始
+## 构建与测试
 
-要求仓颉工具链 `1.0.4`。
+仓颉工具链版本为 `1.0.4`。
 
 ```powershell
 cd cj_core
@@ -35,19 +27,17 @@ cjpm test --no-color
 "2" | cjpm run
 ```
 
-上述命令依次执行构建、标准单元测试和核心集成回归。
-
-运行最小示例：
+`cjpm test` 当前运行 9 项测试；输入 `2` 执行核心集成回归。最小示例可通过下列命令运行：
 
 ```powershell
 cd cj_core
 "0" | cjpm run
 ```
 
-## 全量实验
+## 实验复现
 
-原始数据、模型和冻结 embedding 不进入 Git。准备方法见
-[复现实验说明](docs/reproducibility.md)。
+原始数据、模型和中间向量文件体积较大，不随仓库发布。数据准备和文件校验方法见
+[复现说明](docs/reproducibility.md)。完整查询池实验的调用方式为：
 
 ```powershell
 .\tools\run_image_full_suite.ps1 `
@@ -59,38 +49,31 @@ cd cj_core
   -LiveOutput
 ```
 
-准确率—延迟参数扫描：
+HDMG 参数扫描使用每个数据集固定的前 200 个查询：
 
 ```powershell
 python tools\run_accuracy_parameter_scan.py --queries 200 --beta 0.5
 ```
 
-## 仓库结构
+## 目录
 
 ```text
-cj_core/          仓颉核心、Benchmark 和测试
-tools/            数据准备、评测、校验与汇总工具
-manifests/        小样例和冻结实验清单
-results-summary/  可提交、可审阅的精选结果
-docs/             架构、实验方法、复现说明和已知限制
+cj_core/          仓颉实现与测试
+tools/            数据处理和实验脚本
+manifests/        实验输入清单
+results-summary/  汇总结果
+docs/             设计与复现文档
 ```
 
-数据、模型、完整 artifact、原始日志和构建产物保存在本地并由 Git 忽略。
-
-## 文档
+## 进一步阅读
 
 - [架构与设计](docs/architecture.md)
-- [实验方法与结果](docs/experiments.md)
-- [复现实验](docs/reproducibility.md)
+- [实验设置](docs/experiments.md)
+- [复现说明](docs/reproducibility.md)
 - [已知限制](docs/limitations.md)
 - [工具索引](tools/README.md)
-- [参与贡献](CONTRIBUTING.md)
-
-## 项目状态
-
-本仓库是研究型实现，不以替代 Faiss 或通用向量数据库为目标。HDMG 是实际图索引；
-rep/single 接口目前仍采用精确遍历快照。外部数据库通过 Python SDK 进程适配器接入。
+- [贡献指南](CONTRIBUTING.md)
 
 ## 许可
 
-本项目采用 [MIT License](LICENSE)。
+本项目以 [MIT License](LICENSE) 发布。

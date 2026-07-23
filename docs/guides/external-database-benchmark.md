@@ -1,27 +1,36 @@
-# 仓颉外部向量数据库 Benchmark 框架
+# 外部向量数据库实验
 
-## 目标
+仓颉 runner 通过 `ExternalVectorBackend` 调用 `tools/external_db_benchmark.py`，由后者适配
+Milvus、Qdrant 和 Chroma。实验使用稳定 `recordId` 计算指标，不依赖数据库内部 ID。
 
-仓颉 runner 通过统一 `ExternalVectorBackend` 启动数据库 benchmark。Milvus、Qdrant、Chroma
-的 SDK 差异封装在 `tools/external_db_benchmark.py`，结果统一返回 `DB_RESULT_JSON`。
+适配器报告两种检索方式：
 
-该框架比较两种口径：
+1. 数据库按 embedding cosine 直接返回 Top-K；
+2. 数据库先召回候选，再由评测程序按 mixed score 重排。
 
-1. 数据库原始 embedding cosine Top-K；
-2. 数据库取 `Top-K × 80` 候选，再按 Python 论文版本的 mixed score 在 benchmark 层 rerank。
+第二种方式用于分析候选召回对混合检索的影响，不与数据库原生结果合并。
 
-所有 backend 使用稳定 `recordId`，数据库内部整数 ID 不进入指标计算。
+## 连接配置
 
-## 快速验证
+| 后端 | 默认地址 | 环境变量 |
+| --- | --- | --- |
+| Qdrant | `http://127.0.0.1:6333` | `QDRANT_URL` |
+| Milvus | `http://127.0.0.1:19530` | `MILVUS_URI`、`MILVUS_TOKEN` |
+| Chroma | `127.0.0.1:8000` | `CHROMA_HOST`、`CHROMA_PORT` |
 
-不启动真实数据库即可使用 exact mock 验证完整链路：
+Python 依赖见 `tools/requirements-external-db.txt`。数据库服务需由运行者预先启动；
+适配器不会下载镜像或把连接错误记录为零值。
+
+## 运行
+
+exact mock 可用于检查仓颉与 Python 之间的调用链：
 
 ```powershell
 cd cj_core
 "dbbench mock 1 smoke" | cjpm run
 ```
 
-真实 backend：
+真实后端可从仓颉入口运行：
 
 ```powershell
 "dbbench qdrant 1 smoke" | cjpm run
@@ -29,60 +38,20 @@ cd cj_core
 "dbbench chroma 1 smoke" | cjpm run
 ```
 
-也可以直接运行适配器：
+也可直接调用 Python 适配器：
 
 ```powershell
-python tools\external_db_benchmark.py --backend qdrant --dataset 1 --scale smoke
+python tools\external_db_benchmark.py `
+  --backend qdrant `
+  --artifact artifacts/python-paper-90-10/caltech-full `
+  --scale full
 ```
 
-## 默认连接
+每次实验应新建 collection，以免不同数据划分相互污染。90/10 输入只在预处理阶段生成一次，
+数据库端不得再次划分。
 
-| Backend | 默认地址 | 环境变量 |
-|---|---|---|
-| Qdrant | `http://127.0.0.1:6333` | `QDRANT_URL` |
-| Milvus | `http://127.0.0.1:19530` | `MILVUS_URI`、`MILVUS_TOKEN` |
-| Chroma | `127.0.0.1:8000` | `CHROMA_HOST`、`CHROMA_PORT` |
+## 输出
 
-可选 Python 依赖见 `tools/requirements-external-db.txt`。数据库服务必须由实验环境显式启动；
-runner 不会自动下载镜像、启动服务或把连接失败伪装成 N/A 结果。
-
-### 当前工作站真实服务验证
-
-2026-07-21 已在 Docker 真实服务上完成 Caltech smoke：
-
-| 后端 | 服务/镜像版本 | 本机端口 | 仓颉入口验证 |
-|---|---|---|---|
-| Milvus | server 2.3.15，`pymilvus` 2.6.9 | 19530 | 通过 |
-| Qdrant | server 1.16.1，`qdrant-client` 1.17.0 | 6333 | 通过 |
-| Chroma | `chromadb/chroma:1.5.5`，client 1.5.5 | 8000 | 通过 |
-
-三者均使用同一 Caltech sample 的 fold-0、1616 条训练向量和 20 条查询，成功完成建库、插入、
-向量查询、`TopK × 80` 候选和 Mixed Rerank。该结果证明真实连接链路可用，但仍是 smoke，不能
-代替 full 数据和正式重复实验。
-
-当前工作站后续可直接启动已有容器：
-
-```powershell
-docker start milvus-etcd milvus-minio milvus-standalone
-docker start violas-qdrant
-docker start violas-chroma
-```
-
-其中 Qdrant 与 Chroma 只绑定 `127.0.0.1`；Milvus 是工作站原有 Compose 服务。迁移到其他机器时，
-应按官方 Docker/Compose 文档重新创建并固定镜像版本，不能依赖上述本机容器名称。
-
-## 输出字段
-
-- `rawVector.recallAtK/ndcgAtK`：数据库原始向量结果；
-- `mixedRerank.recallAtK/ndcgAtK`：候选经过统一 mixed rerank 后的结果；
-- `buildMs`：建集合和批量写入时间；
-- `latencyMs.database*`：数据库 SDK 调用时间；
-- `latencyMs.rerankMean`：benchmark rerank 时间；
-- `config`：数据库地址、索引、metric、beta、candidate multiplier；
-- `provenance`：Git commit、系统和依赖环境。
-
-正式实验时每个 split/fold 应重建独立 collection，避免训练集之间相互污染。当前框架既保留
-`precomputed-five-fold` 的 fold-0 调试入口，也支持直接读取冻结的 `python-paper-90-10` artifact。
-90/10 只在预处理阶段按类别和 `random_state=42` 生成一次；数据库不再自行切分。五折仍作为另一个
-明确命名的实验协议，不能与 Python 原指标混用。具体命令见
-[`python-paper-90-10-protocol.md`](python-paper-90-10-protocol.md)。
+输出 JSON 分别保存原生向量检索和 mixed rerank 的 Recall@K、NDCG@K 与延迟，同时记录
+建库时间、后端配置、Git commit、操作系统和依赖版本。Docker service 模式下的延迟包含
+SDK 调用及进程间通信，不应与进程内索引延迟直接比较。

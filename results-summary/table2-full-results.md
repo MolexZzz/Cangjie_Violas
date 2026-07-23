@@ -1,6 +1,7 @@
-# Average image-dataset paper-style comparison
+# 三图像数据集完整查询结果
 
-Average over Caltech-101, CUB-200-2011, and COCO. Each dataset contributes equally; each run uses its complete 10% test pool.
+下表汇总 Caltech-101、CUB-200-2011 和 COCO 的实验结果。每套数据使用完整的 10% 查询集，
+总表对三个数据集作等权平均。
 
 <table>
   <thead>
@@ -22,17 +23,18 @@ Average over Caltech-101, CUB-200-2011, and COCO. Each dataset contributes equal
   </tbody>
 </table>
 
-Notes:
+说明：
 
-- Violas is the Cangjie HDMG result. `w/o HDMG` first routes entity groups by entity score and directly searches micro-clusters inside those groups.
-- In the main paper-style table, Milvus, Qdrant, and Chroma rank instance embeddings only and directly return vector Top-3, without entity representations or local mixed reranking.
-- NDCG uses mixed score as the graded gain, following Equation 14.
-- NDCG at β=1.0 is shown as `—`, matching the paper table, because all records under the winning semantic key are tied.
-- This is a three-image-dataset average, not the paper's six-dataset average.
+- `Violas` 为仓颉 HDMG 查询结果。`w/o HDMG` 先按实体距离选择类别，再精确检索其微簇。
+- Milvus、Qdrant 和 Chroma 只按实例 embedding 排序，不使用实体表示，也不执行本地混合重排。
+- NDCG 使用 mixed score 计算分级相关性。β=1.0 时，同一语义类别中的记录无法区分，
+  因此该项记为 `—`。
+- 本表是三个图像数据集的平均值，不是原论文的六数据集平均值。
 
-## Auxiliary database two-stage mixed-rerank results
+## 外部数据库两阶段检索
 
-Each database first retrieves 30 candidates by embedding similarity, then the benchmark locally reranks them by mixed score. These enhanced results are not used in the main paper-style table.
+各数据库先按 embedding 相似度召回 30 个候选，再由评测程序按 mixed score 重排。
+这组结果用于观察候选召回后的上限，不计入上表。
 
 | β | Milvus Recall | Qdrant Recall | Chroma Recall | Milvus NDCG | Qdrant NDCG | Chroma NDCG | Milvus latency | Qdrant latency | Chroma latency |
 | ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -48,4 +50,4 @@ Each database first retrieves 30 candidates by embedding similarity, then the be
 | 0.9 | 0.937 | 0.954 | 0.953 | 0.992 | 0.993 | 0.993 | 7.73 | 26.88 | 17.96 |
 | 1.0 | 0.951 | 0.954 | 0.953 | 0.991 | 0.992 | 0.992 | 7.78 | 26.96 | 18.04 |
 
-Source: `results/python-paper-90-10/2026-07-23-table2-v5-service/summary.json`
+原始汇总文件：`results/python-paper-90-10/2026-07-23-table2-v5-service/summary.json`
