@@ -114,6 +114,22 @@ public class VectorGroup {
         return this.vectors.size - 1
     }
 
+    /** 原位更新一个对象；成功时向量和描述仍保持一一对应。 */
+    public func updateAt(index: Int64, vector: Array<Float64>): Bool {
+        if (index < 0 || index >= this.vectors.size) { return false }
+        if (!this.vectors.isEmpty() && vector.size != this.vectors[0].size) { return false }
+        this.vectors[index] = vector
+        return true
+    }
+
+    /** 删除指定对象；调用方负责处理索引失效。 */
+    public func removeAt(index: Int64): Bool {
+        if (index < 0 || index >= this.vectors.size) { return false }
+        this.vectors.remove(at: index)
+        this.descriptions.remove(at: index)
+        return true
+    }
+
     /** 获取当前组内的向量总数 */
     public func size(): Int64 { return this.vectors.size }
     

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import math
+import os
 import platform
 import subprocess
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +22,80 @@ from paper_artifact import load_artifact
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class PeakRssSampler:
+    """Sample process RSS, including native Faiss allocations, when psutil exists."""
+
+    def __init__(self) -> None:
+        self.peak: int | None = None
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._rss = None
+        try:
+            import psutil
+
+            process = psutil.Process()
+            self._rss = lambda: int(process.memory_info().rss)
+        except ImportError:
+            if os.name == "nt":
+                class ProcessMemoryCounters(ctypes.Structure):
+                    _fields_ = [
+                        ("cb", ctypes.c_ulong),
+                        ("PageFaultCount", ctypes.c_ulong),
+                        ("PeakWorkingSetSize", ctypes.c_size_t),
+                        ("WorkingSetSize", ctypes.c_size_t),
+                        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                        ("PagefileUsage", ctypes.c_size_t),
+                        ("PeakPagefileUsage", ctypes.c_size_t),
+                    ]
+
+                def windows_rss() -> int:
+                    counters = ProcessMemoryCounters()
+                    counters.cb = ctypes.sizeof(counters)
+                    get_current_process = ctypes.windll.kernel32.GetCurrentProcess
+                    get_current_process.restype = ctypes.c_void_p
+                    get_memory_info = ctypes.windll.psapi.GetProcessMemoryInfo
+                    get_memory_info.argtypes = [
+                        ctypes.c_void_p,
+                        ctypes.POINTER(ProcessMemoryCounters),
+                        ctypes.c_ulong,
+                    ]
+                    get_memory_info.restype = ctypes.c_int
+                    ok = get_memory_info(
+                        get_current_process(),
+                        ctypes.byref(counters),
+                        counters.cb,
+                    )
+                    if not ok:
+                        raise OSError("GetProcessMemoryInfo failed")
+                    return int(counters.WorkingSetSize)
+
+                self._rss = windows_rss
+
+    def __enter__(self) -> "PeakRssSampler":
+        if self._rss is None:
+            return self
+        self.peak = self._rss()
+
+        def sample() -> None:
+            while not self._stop.wait(0.005):
+                self.peak = max(self.peak or 0, self._rss())
+
+        self._thread = threading.Thread(target=sample, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        if self._rss is None:
+            return
+        self.peak = max(self.peak or 0, self._rss())
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join()
 
 
 def git_commit() -> str | None:
@@ -111,25 +188,40 @@ def build_index(method: str, training: np.ndarray, args: argparse.Namespace) -> 
 
 
 def evaluate(method: str, training: np.ndarray, queries: np.ndarray, gt: list[list[int]], args: argparse.Namespace) -> dict:
-    build_start = time.perf_counter_ns()
-    index, config = build_index(method, training, args)
-    build_ms = (time.perf_counter_ns() - build_start) / 1_000_000.0
-    recalls: list[float] = []
-    ndcgs: list[float] = []
-    latencies: list[float] = []
-    for query, expected in zip(queries, gt):
-        start = time.perf_counter_ns()
-        _, ids = index.search(np.ascontiguousarray(query.reshape(1, -1)), args.top_k)
-        latencies.append((time.perf_counter_ns() - start) / 1_000_000.0)
-        actual = [int(item) for item in ids[0] if item >= 0]
-        recalls.append(len(set(expected) & set(actual)) / float(args.top_k))
-        ndcgs.append(ndcg_at_k(expected, actual, args.top_k))
-    serialized_size = len(faiss.serialize_index(index))
+    memory = PeakRssSampler()
+    memory.__enter__()
+    try:
+        build_start = time.perf_counter_ns()
+        index, config = build_index(method, training, args)
+        build_ms = (time.perf_counter_ns() - build_start) / 1_000_000.0
+        warmup_count = min(args.warmup_queries, len(queries))
+        if warmup_count:
+            index.search(np.ascontiguousarray(queries[:warmup_count]), args.top_k)
+        recalls: list[float] = []
+        ndcgs: list[float] = []
+        latencies: list[float] = []
+        for repeat in range(args.repeats):
+            for query_index, (query, expected) in enumerate(zip(queries, gt)):
+                start = time.perf_counter_ns()
+                _, ids = index.search(np.ascontiguousarray(query.reshape(1, -1)), args.top_k)
+                latencies.append((time.perf_counter_ns() - start) / 1_000_000.0)
+                if repeat == 0:
+                    actual = [int(item) for item in ids[0] if item >= 0]
+                    recalls.append(len(set(expected) & set(actual)) / float(args.top_k))
+                    ndcgs.append(ndcg_at_k(expected, actual, args.top_k))
+                if args.progress_every and (query_index + 1) % args.progress_every == 0:
+                    print(f"FAISS_PROGRESS|{method}|repeat={repeat + 1}/{args.repeats}|"
+                          f"queries={query_index + 1}/{len(queries)}", flush=True)
+        serialized_size = len(faiss.serialize_index(index))
+    finally:
+        memory.__exit__(None, None, None)
+    peak_rss = memory.peak
     return {
         "method": method,
         "config": config,
         "buildMs": build_ms,
         "indexBytes": serialized_size,
+        "peakRssBytes": peak_rss,
         "recallAtK": float(np.mean(recalls)),
         "ndcgAtK": float(np.mean(ndcgs)),
         "latencyMs": {
@@ -138,6 +230,38 @@ def evaluate(method: str, training: np.ndarray, queries: np.ndarray, gt: list[li
             "p95": percentile(latencies, 95),
         },
     }
+
+
+def write_markdown(result: dict, output: Path) -> None:
+    lines = [
+        f"# Faiss vector baseline: {result['dataset']}",
+        "",
+        "该表只比较单向量 cosine Top-K，不包含 Violas 的类别语义距离或 mixed score。",
+        "",
+        f"- training: {result['scale']['trainingVectors']}",
+        f"- queries: {result['scale']['queries']}",
+        f"- dimension: {result['scale']['dimension']}",
+        f"- topK: {result['scale']['topK']}",
+        f"- warmup queries: {result['measurement']['warmupQueries']}",
+        f"- repetitions: {result['measurement']['repetitions']}",
+        "",
+        "| Index | Recall@K | NDCG@K | Build (ms) | Mean (ms/query) | P50 | P95 | Index size (MiB) | Peak RSS (MiB) |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for row in result["results"]:
+        rss = "N/A" if row["peakRssBytes"] is None else f"{row['peakRssBytes'] / 1048576.0:.2f}"
+        lines.append(
+            f"| {row['config']['indexType']} | {row['recallAtK']:.6f} | {row['ndcgAtK']:.6f} | "
+            f"{row['buildMs']:.3f} | {row['latencyMs']['mean']:.4f} | "
+            f"{row['latencyMs']['p50']:.4f} | {row['latencyMs']['p95']:.4f} | "
+            f"{row['indexBytes'] / 1048576.0:.2f} | {rss} |"
+        )
+    lines.extend([
+        "",
+        "说明：Peak RSS 是整个 Python 进程的采样峰值，并非索引独占内存；索引独占磁盘/序列化大小见 Index size。",
+        "",
+    ])
+    output.write_text("\n".join(lines), encoding="utf-8")
 
 
 def main() -> int:
@@ -152,10 +276,16 @@ def main() -> int:
     parser.add_argument("--hnsw-m", type=int, default=16)
     parser.add_argument("--ef-construction", type=int, default=80)
     parser.add_argument("--ef-search", type=int, default=32)
+    parser.add_argument("--warmup-queries", type=int, default=20)
+    parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--progress-every", type=int, default=200)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--markdown", type=Path)
     args = parser.parse_args()
-    if min(args.max_queries, args.top_k, args.nlist, args.nprobe, args.hnsw_m, args.ef_construction, args.ef_search) <= 0:
-        parser.error("query/index parameters must be positive")
+    if min(args.top_k, args.nlist, args.nprobe, args.hnsw_m, args.ef_construction,
+           args.ef_search, args.repeats) <= 0 or min(args.max_queries, args.warmup_queries,
+                                                    args.progress_every) < 0:
+        parser.error("index parameters/repeats must be positive; limits must be non-negative")
 
     if args.artifact:
         manifest, artifact_records, artifact_queries, _, artifact_gt = load_artifact(args.artifact)
@@ -195,6 +325,12 @@ def main() -> int:
             **source_limits,
         },
         "groundTruth": "stable NumPy brute-force cosine/IP",
+        "measurement": {
+            "warmupQueries": min(args.warmup_queries, len(queries)),
+            "repetitions": args.repeats,
+            "latencyBoundary": "one Faiss index.search call for one query",
+            "peakRss": "5 ms process-RSS sampling; null when psutil is unavailable",
+        },
         "results": [evaluate(method, training, queries, gt, args) for method in ("exact", "ivf", "hnsw")],
         "provenance": {
             "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
@@ -209,8 +345,12 @@ def main() -> int:
     output = args.output or ROOT / "results" / "faiss" / f"{dataset_name}-sample.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    markdown = args.markdown or output.with_suffix(".md")
+    markdown.parent.mkdir(parents=True, exist_ok=True)
+    write_markdown(result, markdown)
     print(json.dumps({row["method"]: {key: row[key] for key in ("recallAtK", "ndcgAtK", "buildMs", "indexBytes", "latencyMs")} for row in result["results"]}, indent=2))
     print(f"wrote {output}")
+    print(f"wrote {markdown}")
     return 0
 
 

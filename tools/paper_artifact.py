@@ -410,7 +410,7 @@ def build_artifact(
     write_jsonl(output_dir / "microclusters.jsonl", microclusters)
 
     with (output_dir / "cangjie_input.txt").open("w", encoding="utf-8", newline="\n") as handle:
-        handle.write(f"META\t{PROTOCOL}\t{dataset}\t{top_k}\n")
+        handle.write(f"META\t{PROTOCOL}\t{dataset}\t{top_k}\t{len(query_pool_ids)}\n")
         for key in keys:
             handle.write(f"KEY\t{key}\t{','.join(map(str, key_vectors[key]))}\n")
         for record in train_records:
@@ -504,8 +504,8 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--test-size", type=float, default=0.1)
     parser.add_argument("--top-k", type=int, default=3)
-    parser.add_argument("--max-queries", type=int, default=200,
-                        help="match Python paper benchmark default; 0 means the full 10%% query pool")
+    parser.add_argument("--max-queries", type=int, default=0,
+                        help="Table 2 uses the full 10%% query pool; positive values are debug-only")
     parser.add_argument("--betas", type=parse_betas,
                         default=parse_betas("0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0"))
     parser.add_argument("--full-verified", action="store_true",

@@ -10,7 +10,7 @@
 
 1. 使用 Caltech 8,677 张有效图片（排除背景类）、CUB 11,788 张图片和固定 COCO-10k；
 2. 用同一份 OpenAI CLIP `ViT-B/32` 权重生成并冻结三套向量；
-3. 核对 90/10 划分、查询上限和 ground truth 后，生成时显式使用 `--full-verified`。
+3. 核对 90/10 划分和 ground truth 后，Table 2 使用完整 10% 测试池，生成时显式使用 `--max-queries 0 --full-verified`。
 
 ## 实验包内容
 
@@ -60,6 +60,7 @@ python tools/paper_artifact.py `
   --model ViT-B/32 `
   --seed 42 `
   --test-size 0.1 `
+  --max-queries 0 `
   --full-verified
 ```
 
@@ -73,6 +74,7 @@ python tools/paper_artifact.py `
   --image-root dataset/coco `
   --output-dir artifacts/python-paper-90-10/coco-full `
   --key-vector-source clip-text `
+  --max-queries 0 `
   --full-verified
 ```
 
@@ -97,7 +99,7 @@ HDMG 分阶段汇总表：
 
 ```powershell
 Set-Location cj_core
-"paper ../artifacts/python-paper-90-10/caltech-full/cangjie_input.txt 200 all" | cjpm run
+"paper ../artifacts/python-paper-90-10/caltech-full/cangjie_input.txt 0 all" | cjpm run
 ```
 
 Docker 服务未运行或尚未合并外部数据库结果时，Milvus、Qdrant、Chroma 列显示 `N/A`；

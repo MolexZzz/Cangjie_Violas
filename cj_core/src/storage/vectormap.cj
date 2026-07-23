@@ -335,6 +335,72 @@ public class VectorMap <: ToString {
         return Int64(idx)
     }
 
+    private func _descriptionMatchesId(description: HashMap<String, Any>, recordId: String): Bool {
+        if (description.contains("recordId")) {
+            let stableId = description["recordId"] as String
+            if (stableId.isSome() && stableId.getOrThrow() == recordId) { return true }
+        }
+        // Frozen paper artifacts historically stored the record ID as a plain
+        // string, which normalizeDescription places under "text".
+        if (description.contains("text")) {
+            let textId = description["text"] as String
+            return textId.isSome() && textId.getOrThrow() == recordId
+        }
+        return false
+    }
+
+    /** 将一个具有稳定 ID 的对象追加到已有微簇。 */
+    public func insertObject(
+        key: String,
+        groupName: String,
+        recordId: String,
+        vector: Array<Float64>
+    ): Bool {
+        match (getGroupByName(key, groupName)) {
+            case None => return false
+            case Some(group) =>
+                let description = HashMap<String, Any>()
+                description["recordId"] = recordId
+                description["key"] = key
+                description["group_name"] = groupName
+                if (group.append(vector, description) < 0) { return false }
+                _invalidateIndexes()
+                return true
+        }
+    }
+
+    /** 按稳定 ID 更新对象向量，避免删除后数组下标变化造成引用失效。 */
+    public func updateObject(recordId: String, vector: Array<Float64>): Bool {
+        for ((_, entry) in this.data) {
+            for (group in entry.groups) {
+                for (i in 0..group.descriptions.size) {
+                    if (_descriptionMatchesId(group.descriptions[i], recordId)) {
+                        if (!group.updateAt(i, vector)) { return false }
+                        _invalidateIndexes()
+                        return true
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    /** 按稳定 ID 删除对象，并使所有派生索引失效。 */
+    public func deleteObject(recordId: String): Bool {
+        for ((_, entry) in this.data) {
+            for (group in entry.groups) {
+                for (i in 0..group.descriptions.size) {
+                    if (_descriptionMatchesId(group.descriptions[i], recordId)) {
+                        if (!group.removeAt(i)) { return false }
+                        _invalidateIndexes()
+                        return true
+                    }
+                }
+            }
+        }
+        return false
+    }
+
     // ============= 关系建模方法 =============
 
     // 建立两个向量组之间1 ：1 的配对关系（跨模态）
@@ -710,6 +776,93 @@ public class VectorMap <: ToString {
             }
         }
         sort(candidates, by: {a, b => a.compare(b)})
+        let limit = if (topK < candidates.size) { topK } else { candidates.size }
+        return Array<SearchResult>(limit, { i => candidates[i] })
+    }
+
+    // Paper ablation from Section 6.1: preserve entity routing and the mixed
+    // score, but replace HDMG traversal with a direct scan of micro-clusters
+    // inside the routed entity groups.
+    public func searchWithoutHdmg(
+        queryVector: Array<Float64>,
+        queryKeyVector!: Option<Array<Float64>> = None,
+        beta!: Float64 = 0.0,
+        topK!: Int64 = 5,
+        groupBudget!: Int64 = 5,
+        microClusterBudget!: Int64 = 9,
+        distanceMethod!: String = "cosine"
+    ): Array<SearchResult> {
+        if (topK <= 0) { return Array<SearchResult>() }
+        if (groupBudget <= 0 || microClusterBudget <= 0) {
+            throw IllegalArgumentException("w/o HDMG budgets must be positive")
+        }
+        let effectiveBeta = clampUnit(beta)
+        let distFunc = _distanceFunc(distanceMethod)
+
+        // Layer 1: route entity groups only by their entity representation.
+        // Every key owns one vector group and its groups array contains that
+        // entity's micro-clusters in the frozen paper artifact.
+        let entityMicroClusters = HashMap<String, ArrayList<VectorGroup>>()
+        for ((key, entry) in this.data) {
+            let entityKey = storageBaseKey(key)
+            if (!entityMicroClusters.contains(entityKey)) {
+                entityMicroClusters[entityKey] = ArrayList<VectorGroup>()
+            }
+            for (group in entry.groups) { entityMicroClusters[entityKey].add(group) }
+        }
+        let routedGroups = ArrayList<SearchResult>()
+        for ((key, groups) in entityMicroClusters) {
+            if (groups.isEmpty()) { continue }
+            let semOpt = _semanticDistance(queryKeyVector, key, distanceMethod)
+            if (semOpt.isSome()) {
+                routedGroups.add(SearchResult(semOpt.getOrThrow(), key, groups[0], None))
+            } else {
+                // The paper queries provide an entity representation. Keep a
+                // deterministic embedding fallback for the public API.
+                var best = Float64.Max
+                for (group in groups) {
+                    let d = distFunc(queryVector, group.representative)
+                    if (d < best) { best = d }
+                }
+                routedGroups.add(SearchResult(best, key, groups[0], None))
+            }
+        }
+        sort(routedGroups, by: { a, b => a.compare(b) })
+        let routedLimit = if (groupBudget < routedGroups.size) { groupBudget } else { routedGroups.size }
+
+        // Layer 2: directly scan all micro-clusters in each routed group and
+        // retain the per-group micro-cluster budget under the mixed score.
+        let selectedClusters = ArrayList<SearchResult>()
+        for (ri in 0..routedLimit) {
+            let key = routedGroups[ri].key
+            let clusterScores = ArrayList<SearchResult>()
+            let semOpt = if (effectiveBeta != 0.0) {
+                _semanticDistance(queryKeyVector, key, distanceMethod)
+            } else { Option<Float64>.None }
+            for (group in entityMicroClusters[key]) {
+                let repD = distFunc(queryVector, group.representative)
+                clusterScores.add(SearchResult(mixedDistance(repD, semOpt, effectiveBeta), key, group, None))
+            }
+            sort(clusterScores, by: { a, b => a.compare(b) })
+            let clusterLimit = if (microClusterBudget < clusterScores.size) { microClusterBudget } else { clusterScores.size }
+            for (ci in 0..clusterLimit) { selectedClusters.add(clusterScores[ci]) }
+        }
+
+        // Layer 3: refine members with the same mixed objective.
+        let candidates = ArrayList<SearchResult>()
+        for (cluster in selectedClusters) {
+            let semOpt = if (effectiveBeta != 0.0) {
+                _semanticDistance(queryKeyVector, cluster.key, distanceMethod)
+            } else { Option<Float64>.None }
+            for (i in 0..cluster.group.vectors.size) {
+                let embD = distFunc(queryVector, cluster.group.vectors[i])
+                candidates.add(SearchResult(
+                    mixedDistance(embD, semOpt, effectiveBeta),
+                    cluster.key, cluster.group, Some(i)
+                ))
+            }
+        }
+        sort(candidates, by: { a, b => a.compare(b) })
         let limit = if (topK < candidates.size) { topK } else { candidates.size }
         return Array<SearchResult>(limit, { i => candidates[i] })
     }

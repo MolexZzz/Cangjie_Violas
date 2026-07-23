@@ -38,6 +38,9 @@ class ExternalVectorBackend(ABC):
     @abstractmethod
     def search(self, vector: list[float], limit: int) -> list[tuple[str, float]]: ...
 
+    @abstractmethod
+    def delete(self, record_ids: list[str]) -> None: ...
+
     def close(self) -> None:
         return None
 
@@ -56,6 +59,8 @@ class MockExactBackend(ExternalVectorBackend):
         self.records = []
 
     def upsert(self, records: list[dict]) -> None:
+        replacements = {row["recordId"]: row for row in records}
+        self.records = [row for row in self.records if row["recordId"] not in replacements]
         self.records.extend(records)
 
     def search(self, vector: list[float], limit: int) -> list[tuple[str, float]]:
@@ -68,24 +73,35 @@ class MockExactBackend(ExternalVectorBackend):
         scored.sort(key=lambda row: (-row[1], row[0]))
         return scored[:limit]
 
+    def delete(self, record_ids: list[str]) -> None:
+        removed = set(record_ids)
+        self.records = [row for row in self.records if row["recordId"] not in removed]
+
 
 class QdrantBackend(ExternalVectorBackend):
     name = "qdrant"
 
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, *, local: bool = False) -> None:
         try:
             from qdrant_client import QdrantClient, models
         except ImportError as exc:
             raise RuntimeError("Qdrant backend requires: pip install qdrant-client") from exc
         self.models = models
-        self.client = QdrantClient(url=url)
-        self.url = url
-        self.server_version = str(self.client.info().version)
+        self.client = QdrantClient(":memory:") if local else QdrantClient(url=url)
+        self.url = ":memory:" if local else url
+        self.execution_mode = "in-process" if local else "service"
+        try:
+            self.server_version = str(self.client.info().version)
+        except Exception:
+            self.server_version = metadata.version("qdrant-client")
         self.collection = ""
         self.id_map: dict[int, str] = {}
+        self.record_id_map: dict[str, int] = {}
 
     def reset(self, collection: str, dimension: int) -> None:
         self.collection = collection
+        self.id_map = {}
+        self.record_id_map = {}
         if self.client.collection_exists(collection):
             self.client.delete_collection(collection)
         self.client.create_collection(
@@ -94,12 +110,19 @@ class QdrantBackend(ExternalVectorBackend):
         )
 
     def upsert(self, records: list[dict]) -> None:
-        self.id_map = {index: record["recordId"] for index, record in enumerate(records)}
         batch_size = 256
         for start in range(0, len(records), batch_size):
             batch = records[start : start + batch_size]
+            point_ids = []
+            for record in batch:
+                if record["recordId"] not in self.record_id_map:
+                    internal_id = len(self.record_id_map)
+                    self.record_id_map[record["recordId"]] = internal_id
+                    self.id_map[internal_id] = record["recordId"]
+                point_ids.append(self.record_id_map[record["recordId"]])
             points = [
-                self.models.PointStruct(id=start + offset, vector=record["vector"], payload={"recordId": record["recordId"]})
+                self.models.PointStruct(id=point_ids[offset], vector=record["vector"],
+                                        payload={"recordId": record["recordId"]})
                 for offset, record in enumerate(batch)
             ]
             self.client.upsert(collection_name=self.collection, points=points, wait=True)
@@ -108,28 +131,58 @@ class QdrantBackend(ExternalVectorBackend):
         response = self.client.query_points(collection_name=self.collection, query=vector, limit=limit, with_payload=True)
         return [(point.payload["recordId"], float(point.score)) for point in response.points]
 
+    def delete(self, record_ids: list[str]) -> None:
+        point_ids = [self.record_id_map[item] for item in record_ids if item in self.record_id_map]
+        if point_ids:
+            self.client.delete(
+                collection_name=self.collection,
+                points_selector=self.models.PointIdsList(points=point_ids),
+                wait=True,
+            )
+
     @property
     def config(self) -> dict:
-        return {"backend": self.name, "url": self.url, "serverVersion": self.server_version,
+        return {"backend": self.name, "url": self.url, "executionMode": self.execution_mode,
+                "serverVersion": self.server_version,
                 "metric": "cosine", "index": "engine-default HNSW"}
 
 
 class MilvusBackend(ExternalVectorBackend):
     name = "milvus"
 
-    def __init__(self, uri: str, token: str) -> None:
+    def __init__(self, uri: str, token: str, *, local_path: Path | None = None) -> None:
         try:
             from pymilvus import DataType, MilvusClient
         except ImportError as exc:
             raise RuntimeError("Milvus backend requires: pip install pymilvus") from exc
         self.DataType = DataType
-        self.client = MilvusClient(uri=uri, token=token)
-        self.uri = uri
-        self.server_version = self.client.get_server_version()
+        if local_path is not None:
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                self.client = MilvusClient(uri=str(local_path))
+            except Exception as exc:
+                raise RuntimeError(
+                    "paper-local Milvus requires Milvus Lite. Milvus Lite has no native Windows "
+                    "runtime; run this mode under Linux/WSL with `pip install pymilvus[milvus_lite]`, "
+                    "or use --execution-mode service for accuracy experiments whose latency is not "
+                    "directly comparable to the paper."
+                ) from exc
+            self.uri = str(local_path)
+            self.execution_mode = "in-process"
+        else:
+            self.client = MilvusClient(uri=uri, token=token)
+            self.uri = uri
+            self.execution_mode = "service"
+        try:
+            self.server_version = self.client.get_server_version()
+        except Exception:
+            self.server_version = metadata.version("pymilvus")
         self.collection = ""
+        self.record_id_map: dict[str, int] = {}
 
     def reset(self, collection: str, dimension: int) -> None:
         self.collection = collection
+        self.record_id_map = {}
         if self.client.has_collection(collection_name=collection):
             self.client.drop_collection(collection_name=collection)
         schema = self.client.create_schema(auto_id=False, enable_dynamic_field=False)
@@ -147,8 +200,13 @@ class MilvusBackend(ExternalVectorBackend):
         batch_size = 256
         for start in range(0, len(records), batch_size):
             batch = records[start : start + batch_size]
-            rows = [{"id": start + offset, "recordId": record["recordId"], "vector": record["vector"]} for offset, record in enumerate(batch)]
-            self.client.insert(collection_name=self.collection, data=rows)
+            rows = []
+            for record in batch:
+                if record["recordId"] not in self.record_id_map:
+                    self.record_id_map[record["recordId"]] = len(self.record_id_map)
+                rows.append({"id": self.record_id_map[record["recordId"]],
+                             "recordId": record["recordId"], "vector": record["vector"]})
+            self.client.upsert(collection_name=self.collection, data=rows)
         self.client.flush(collection_name=self.collection)
 
     def search(self, vector: list[float], limit: int) -> list[tuple[str, float]]:
@@ -161,23 +219,31 @@ class MilvusBackend(ExternalVectorBackend):
         )[0]
         return [(row["entity"]["recordId"], float(row["distance"])) for row in rows]
 
+    def delete(self, record_ids: list[str]) -> None:
+        ids = [self.record_id_map[item] for item in record_ids if item in self.record_id_map]
+        if ids:
+            self.client.delete(collection_name=self.collection, ids=ids)
+            self.client.flush(collection_name=self.collection)
+
     @property
     def config(self) -> dict:
-        return {"backend": self.name, "uri": self.uri, "serverVersion": self.server_version,
+        return {"backend": self.name, "uri": self.uri, "executionMode": self.execution_mode,
+                "serverVersion": self.server_version,
                 "metric": "cosine", "index": "IVF_FLAT", "nlist": 1024, "nprobe": 10}
 
 
 class ChromaBackend(ExternalVectorBackend):
     name = "chroma"
 
-    def __init__(self, host: str, port: int) -> None:
+    def __init__(self, host: str, port: int, *, local: bool = False) -> None:
         try:
             import chromadb
         except ImportError as exc:
             raise RuntimeError("Chroma backend requires: pip install chromadb") from exc
-        self.client = chromadb.HttpClient(host=host, port=port)
-        self.host = host
-        self.port = port
+        self.client = chromadb.EphemeralClient() if local else chromadb.HttpClient(host=host, port=port)
+        self.host = "in-process" if local else host
+        self.port = 0 if local else port
+        self.execution_mode = "in-process" if local else "service"
         self.server_version = self.client.get_version()
         self.collection = None
 
@@ -192,7 +258,7 @@ class ChromaBackend(ExternalVectorBackend):
         batch_size = 256
         for start in range(0, len(records), batch_size):
             batch = records[start : start + batch_size]
-            self.collection.add(
+            self.collection.upsert(
                 ids=[record["recordId"] for record in batch],
                 embeddings=[record["vector"] for record in batch],
             )
@@ -201,9 +267,14 @@ class ChromaBackend(ExternalVectorBackend):
         response = self.collection.query(query_embeddings=[vector], n_results=limit, include=["distances"])
         return [(item_id, 1.0 - float(distance)) for item_id, distance in zip(response["ids"][0], response["distances"][0])]
 
+    def delete(self, record_ids: list[str]) -> None:
+        if record_ids:
+            self.collection.delete(ids=record_ids)
+
     @property
     def config(self) -> dict:
         return {"backend": self.name, "host": self.host, "port": self.port,
+                "executionMode": self.execution_mode,
                 "serverVersion": self.server_version, "metric": "cosine", "index": "engine-default HNSW"}
 
 
@@ -282,11 +353,36 @@ def key_ndcg(expected: list[str], actual: list[str], by_id: dict[str, dict], top
     return dcg / ideal if ideal else 0.0
 
 
+def mixed_relevance(record: dict, query: dict, key_vectors: dict[str, list[float]], beta: float) -> float:
+    """Equation 5 similarity score used as the graded gain in Equation 14."""
+    embedding_similarity = 1.0 - cosine_distance(query["vector"], record["vector"])
+    entity_similarity = 1.0 - cosine_distance(query["keyVector"], key_vectors[record["key"]])
+    return min(1.0, max(0.0, beta * entity_similarity + (1.0 - beta) * embedding_similarity))
+
+
+def graded_mixed_ndcg(ideal_ids: list[str], actual_ids: list[str], by_id: dict[str, dict],
+                      query: dict, key_vectors: dict[str, list[float]], beta: float, top_k: int) -> float:
+    """Paper Equation 14; unlike the old helper, relevance is not binary."""
+    def dcg(ids: list[str]) -> float:
+        total = 0.0
+        for rank, item_id in enumerate(ids[:top_k]):
+            score = mixed_relevance(by_id[item_id], query, key_vectors, beta)
+            total += (2.0 ** score - 1.0) / math.log2(rank + 2)
+        return total
+
+    ideal = dcg(ideal_ids)
+    return dcg(actual_ids) / ideal if ideal else 0.0
+
+
 def make_backend(args: argparse.Namespace) -> ExternalVectorBackend:
     if args.backend == "mock": return MockExactBackend()
-    if args.backend == "qdrant": return QdrantBackend(args.qdrant_url)
-    if args.backend == "milvus": return MilvusBackend(args.milvus_uri, args.milvus_token)
-    if args.backend == "chroma": return ChromaBackend(args.chroma_host, args.chroma_port)
+    local = args.execution_mode == "paper-local"
+    if args.backend == "qdrant": return QdrantBackend(args.qdrant_url, local=local)
+    if args.backend == "milvus": return MilvusBackend(
+        args.milvus_uri, args.milvus_token,
+        local_path=(args.local_state_dir / "milvus-lite.db") if local else None,
+    )
+    if args.backend == "chroma": return ChromaBackend(args.chroma_host, args.chroma_port, local=local)
     raise ValueError(args.backend)
 
 
@@ -323,6 +419,10 @@ def main() -> int:
     parser.add_argument("--betas", type=parse_betas,
                         help="run several mixed weights after one database build, for example 0.0,0.1,...,1.0")
     parser.add_argument("--candidate-multiplier", type=int, default=10)
+    parser.add_argument("--execution-mode", choices=("paper-local", "service"), default="paper-local",
+                        help="paper-local matches the paper's in-memory/in-process boundary; service uses Docker/HTTP")
+    parser.add_argument("--local-state-dir", type=Path,
+                        default=ROOT / "results" / ".paper-local-state")
     parser.add_argument("--max-queries", type=int,
                         help="override the scale query limit; useful for matching Cangjie smoke runs")
     parser.add_argument("--output", type=Path)
@@ -334,7 +434,7 @@ def main() -> int:
     args = parser.parse_args()
     betas = args.betas or [args.beta]
     if (args.top_k <= 0 or args.candidate_multiplier < 1
-            or (args.max_queries is not None and args.max_queries <= 0)
+            or (args.max_queries is not None and args.max_queries < 0)
             or any(not 0.0 <= beta <= 1.0 for beta in betas)):
         parser.error("invalid top-k, candidate multiplier or beta")
     if not args.artifact and not args.dataset:
@@ -354,6 +454,9 @@ def main() -> int:
         query_limit = args.max_queries if args.max_queries is not None else max_queries
         if query_limit:
             queries = queries[:query_limit]
+        query_scope = ("full-10-percent-test-pool"
+                       if len(queries) == artifact_manifest["counts"]["queryPool"]
+                       else "debug-subset")
         split_config = {"splitProtocol": artifact_manifest["protocol"],
                         "artifactStatus": artifact_manifest["artifactStatus"],
                         "artifact": str(args.artifact)}
@@ -363,6 +466,7 @@ def main() -> int:
         folders = load_file(ROOT / "dataset" / "precomputed" / DATASET_FILES[dataset_name])
         query_limit = args.max_queries if args.max_queries is not None else max_queries
         records, queries, key_vectors = prepare_fold(folders, max_per_folder, query_limit)
+        query_scope = "debug-or-five-fold"
         split_config = {"splitProtocol": "precomputed-five-fold", "fold": 0,
                         "keyVectorSource": "fold-train-representative"}
         scale_protocol = {"protocol": "precomputed-five-fold", "fold": 0}
@@ -423,14 +527,16 @@ def main() -> int:
             # are tied within a semantic key, so the paper code uses key recall.
             if beta > 0.999999:
                 beta_stats[beta]["rawRecalls"].append(key_hit_rate(exact_mixed, raw_ids, by_id, args.top_k))
-                beta_stats[beta]["rawNdcgs"].append(key_ndcg(exact_mixed, raw_ids, by_id, args.top_k))
                 beta_stats[beta]["mixedRecalls"].append(key_hit_rate(exact_mixed, mixed_ids, by_id, args.top_k))
-                beta_stats[beta]["mixedNdcgs"].append(key_ndcg(exact_mixed, mixed_ids, by_id, args.top_k))
             else:
                 beta_stats[beta]["rawRecalls"].append(overlap(exact_mixed, raw_ids, args.top_k))
-                beta_stats[beta]["rawNdcgs"].append(ndcg(exact_mixed, raw_ids, args.top_k))
                 beta_stats[beta]["mixedRecalls"].append(overlap(exact_mixed, mixed_ids, args.top_k))
-                beta_stats[beta]["mixedNdcgs"].append(ndcg(exact_mixed, mixed_ids, args.top_k))
+            beta_stats[beta]["rawNdcgs"].append(
+                graded_mixed_ndcg(exact_mixed, raw_ids, by_id, query, key_vectors, beta, args.top_k)
+            )
+            beta_stats[beta]["mixedNdcgs"].append(
+                graded_mixed_ndcg(exact_mixed, mixed_ids, by_id, query, key_vectors, beta, args.top_k)
+            )
             progress_completed += 1
             show_progress(f"{backend.name}/{dataset_name}", progress_completed, progress_total)
     backend.close()
@@ -440,11 +546,21 @@ def main() -> int:
         raw_db_ms = beta_stats[beta]["rawDbMs"]
         candidate_db_ms = beta_stats[beta]["candidateDbMs"]
         rerank_ms = beta_stats[beta]["rerankMs"]
+        raw_recall = mean(beta_stats[beta]["rawRecalls"])
+        raw_ndcg = mean(beta_stats[beta]["rawNdcgs"])
+        mixed_recall = mean(beta_stats[beta]["mixedRecalls"])
+        mixed_ndcg = mean(beta_stats[beta]["mixedNdcgs"])
+        candidate_mean = mean(candidate_db_ms)
+        rerank_mean = mean(rerank_ms)
+        total_mean = mean([a + b for a, b in zip(candidate_db_ms, rerank_ms)])
         runs.append({
             "beta": beta,
+            "evaluationProtocol": "violas-paper-table2-v5",
+            "queryScope": query_scope,
+            "queries": len(queries),
             "rawVector": {
-                "recallAtK": mean(beta_stats[beta]["rawRecalls"]),
-                "ndcgAtK": mean(beta_stats[beta]["rawNdcgs"]),
+                "recallAtK": raw_recall,
+                "ndcgAtK": raw_ndcg,
             },
             "rawLatencyMs": {
                 "databaseMean": mean(raw_db_ms),
@@ -452,27 +568,65 @@ def main() -> int:
                 "databaseP95": percentile(raw_db_ms, 95),
             },
             "mixedRerank": {
-                "recallAtK": mean(beta_stats[beta]["mixedRecalls"]),
-                "ndcgAtK": mean(beta_stats[beta]["mixedNdcgs"]),
+                "recallAtK": mixed_recall,
+                "ndcgAtK": mixed_ndcg,
             },
             "latencyMs": {
-                "databaseMean": mean(candidate_db_ms),
+                "databaseMean": candidate_mean,
                 "databaseP50": percentile(candidate_db_ms, 50),
                 "databaseP95": percentile(candidate_db_ms, 95),
-                "rerankMean": mean(rerank_ms),
-                "totalMean": mean([a + b for a, b in zip(candidate_db_ms, rerank_ms)]),
+                "rerankMean": rerank_mean,
+                "totalMean": total_mean,
+            },
+            # Paper Table 2 baseline: the external database ranks instance
+            # embeddings only and directly returns vector Top-K.
+            "paperComparison": {
+                "method": "direct-vector-top-k",
+                "candidateK": args.top_k,
+                "recallAtK": raw_recall,
+                "ndcgAtK": raw_ndcg,
+                "latencyMs": {
+                    "databaseMean": mean(raw_db_ms),
+                },
+            },
+            # Enhanced auxiliary method: vector candidate retrieval followed
+            # by local mixed-score reranking.
+            "mixedComparison": {
+                "method": "vector-candidate-plus-local-mixed-rerank",
+                "candidateK": candidate_limit,
+                "recallAtK": mixed_recall,
+                "ndcgAtK": mixed_ndcg,
+                "latencyMs": {
+                    "candidateDatabaseMean": candidate_mean,
+                    "rerankMean": rerank_mean,
+                    "totalMean": total_mean,
+                },
+            },
+            # Backward-compatible alias retained for existing readers.
+            "rawComparison": {
+                "method": "direct-vector-top-k",
+                "candidateK": args.top_k,
+                "recallAtK": raw_recall,
+                "ndcgAtK": raw_ndcg,
+                "latencyMs": {
+                    "databaseMean": mean(raw_db_ms),
+                },
             },
         })
 
     result = {
-        "schemaVersion": 1,
+        "schemaVersion": 3,
         "backend": backend.name,
         "dataset": dataset_name,
         "scale": {**scale_protocol, "trainingVectors": len(records), "queries": len(queries), "topK": args.top_k},
         "config": {
             **backend.config,
             **split_config,
-            "evaluationProtocol": "python-image-benchmark-mixed-gt-v2",
+            "evaluationProtocol": "violas-paper-table2-v5",
+            "queryScope": query_scope,
+            "paperComparisonMethod": "direct-vector-top-k",
+            "auxiliaryMixedComparisonMethod": "vector-candidate-plus-local-mixed-rerank",
+            "ndcgGain": "mixed-score-graded",
             "betas": betas,
             "candidateMultiplier": args.candidate_multiplier,
         },

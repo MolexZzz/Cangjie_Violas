@@ -101,6 +101,11 @@ public func runCoreRegressionChecks(): Unit {
         HdmgSearchConfig(maxSteps: 10, clusterPoolMultiplier: 2)
     )
     requireTrue(configuredSearch.size == 2, "HDMG 配置对象搜索入口失败")
+    let paperAblation = vm.searchWithoutHdmg(
+        [-10.0, 0.0], queryKeyVector: Some([1.0, 0.0]), beta: 0.3,
+        topK: 2, groupBudget: 1, microClusterBudget: 2
+    )
+    requireTrue(paperAblation.size == 2, "论文 w/o HDMG 分层直接搜索失败")
 
     let description = HashMap<String, Any>()
     description["key"] = "topic-0001"
@@ -110,6 +115,17 @@ public func runCoreRegressionChecks(): Unit {
     requireTrue(inserted >= 0, "追加向量失败")
     let staleState = vm.getIndexState()
     requireTrue(!(staleState["hdmg_current"] as Bool).getOrThrow(), "追加向量后 HDMG 必须失效")
+
+    let beforeCrud = left.size()
+    requireTrue(vm.insertObject(
+        "topic-0001", "alternating_cluster_0001", "stable-object-1", [0.5, 0.5]
+    ), "稳定 ID 对象插入失败")
+    requireTrue(left.size() == beforeCrud + 1, "对象插入后组大小错误")
+    requireTrue(vm.updateObject("stable-object-1", [0.75, 0.25]), "稳定 ID 对象更新失败")
+    requireTrue(vm.deleteObject("stable-object-1"), "稳定 ID 对象删除失败")
+    requireTrue(left.size() == beforeCrud, "对象删除后组大小未恢复")
+    requireTrue(!vm.updateObject("missing-object", [0.0, 0.0]), "不存在的对象不应更新成功")
+    requireTrue(!vm.deleteObject("missing-object"), "不存在的对象不应删除成功")
 
     requireTrue(vm.search([1.0, 0.0], topK: 0).isEmpty(), "topK=0 应返回空结果")
     let betaOne = vm.searchWithMixedKeyRepVec([10.0, 0.0], queryKeyVector: Some([1.0, 0.0]), beta: 1.0, topK: 2)

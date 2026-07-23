@@ -186,6 +186,7 @@ class FlatScore <: Comparable<FlatScore> {
 public class BetaEvalStats {
     public let beta: Float64
     public let mixed: MethodRecallStats
+    public let withoutHdmg: MethodRecallStats
     public let representative: MethodRecallStats
     public let pyflat: MethodRecallStats
     public let hdmgTrace: HdmgTraceStats
@@ -195,6 +196,7 @@ public class BetaEvalStats {
     public init(beta: Float64) {
         this.beta = beta
         this.mixed = MethodRecallStats("Mixed")
+        this.withoutHdmg = MethodRecallStats("w/o HDMG")
         this.representative = MethodRecallStats("Representative")
         // Keep the benchmark-facing name identical to the Python paper runner.
         // The Cangjie implementation is still a full-scan cosine search.

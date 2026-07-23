@@ -1,0 +1,8 @@
+faiss-cpu
+numpy
+psutil
+
+# Required only when the corresponding real database maintenance backend is run.
+qdrant-client
+pymilvus
+chromadb
