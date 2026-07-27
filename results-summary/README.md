@@ -5,7 +5,7 @@
 - [三图像数据集完整结果](table2-full-results.md)
 - [Violas 与 Faiss 的实现及检索对比](faiss-comparison.md)
 - [HDMG 参数扫描](hdmg-parameter-scan.md)
-- [四范式代码上下文检索案例（Markdown）](../docs/reports/code-context-case-study.md)
+- [四范式代码上下文检索案例（Markdown）](../docs/code-context-case-study.md)
 - [四范式代码上下文检索案例（JSON）](code-context-case-study.json)
 - [机器可读结果](final-results.json)
 

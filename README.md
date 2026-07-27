@@ -4,13 +4,13 @@
 向量距离的近邻检索。仓颉核心包括 `VectorMap`、微簇组织、HDMG 图索引和 Mixed Search；
 Python 工具负责数据预处理、基准测试与结果校验。
 
-## 实践目标与完成情况
+## 功能
 
-| 阶段 | 交付 |
-| --- | --- |
-| （1）代码 review、架构整理和 Faiss 对比 | 拆分存储、聚类、HDMG 与 mixed score 模块；补充测试、代码量统计及 Faiss 对比 |
-| （2）全量数据实验和参数调优 | 完成 Caltech-101、CUB-200-2011、COCO 完整查询池实验和 HDMG 参数扫描 |
-| （3）Violas 支撑 CodeAgent | 实现 EAR、DDR、RER、CMP 四范式代码项目上下文案例 |
+- 以 `VectorMap` 和 `VectorGroup` 组织实体、成员向量、微簇及对象关系；
+- 使用 HDMG 加速实体路由、微簇遍历和候选重排；
+- 支持语义距离与 embedding 距离的 β 加权检索；
+- 提供全量数据实验、Faiss 基线、参数扫描和维护基准；
+- 提供 EAR、DDR、RER、CMP 四种实体中心代码上下文检索示例。
 
 项目目前在 Caltech-101、CUB-200-2011 和 COCO 三个图像数据集上完成了 90% 建库、
 10% 查询的实验。图像和类别文本均使用 CLIP ViT-B/32 编码。β=0.5 时的结果如下：
@@ -24,10 +24,10 @@ Python 工具负责数据预处理、基准测试与结果校验。
 完整结果及其适用范围见 [实验结果](results-summary/README.md)。这些数据只反映本仓库所采用的
 三数据集实验协议，不等同于原论文的六数据集结果。
 
-阶段（3）将仓颉源码、测试、文档、脚本和结果组织为 4 个项目实体、24 个成员和 17 条关系。
+代码上下文案例将仓颉源码、测试、文档、脚本和结果组织为 4 个项目实体、24 个成员和 17 条关系。
 在小型案例中，EAR 的实体纯度与扁平向量检索持平，DDR、RER 和 CMP 分别补充了实现侧面、
 依赖链和源码—文档配对。结果及限制见
-[四范式代码上下文案例](docs/reports/code-context-case-study.md)。
+[四范式代码上下文案例](docs/code-context-case-study.md)。
 
 ## 快速验证
 
@@ -100,7 +100,7 @@ docs/             设计与复现文档
 - [实验设置](docs/experiments.md)
 - [复现说明](docs/reproducibility.md)
 - [已知限制](docs/limitations.md)
-- [四范式代码上下文案例](docs/reports/code-context-case-study.md)
+- [四范式代码上下文案例](docs/code-context-case-study.md)
 - [工具索引](tools/README.md)
 - [贡献指南](CONTRIBUTING.md)
 
