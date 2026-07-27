@@ -1,4 +1,4 @@
-"""Count reproducible source lines for Cangjie Violas, Python Violas and Faiss."""
+"""Count reproducible source lines for this repository and an optional Faiss checkout."""
 
 from __future__ import annotations
 
@@ -140,8 +140,6 @@ def main() -> int:
             repo_tracked,
             include_name_suffixes=("_test.cj",),
         ),
-        "Python Violas core": collect(ROOT, "violas_python/violas", {".py"}, repo_tracked),
-        "Python benchmarks": collect(ROOT, "violas_python/benchmarks", {".py"}, repo_tracked),
         "Repository benchmark tools": collect(ROOT, "tools", {".py", ".ps1"}, repo_tracked),
     }
     faiss_info = None

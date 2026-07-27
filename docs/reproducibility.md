@@ -2,13 +2,26 @@
 
 ## 运行环境
 
-实验使用 Windows 11、仓颉工具链 1.0.4 和 Python 3.11。运行 Milvus、Qdrant 或
-Chroma 时还需要 Docker。完整数据集实验建议为仓颉进程设置 2 GB 堆内存。
+正式实验使用 Windows 11、仓颉工具链 1.0.4 和 Python 3.11。GitHub Actions 使用
+Python 3.13 编译检查工具脚本；为贴近原始运行环境，完整数据实验仍建议使用 Python 3.11。
+运行 Milvus、Qdrant 或 Chroma 时还需要 Docker。完整数据集实验建议为仓颉进程设置
+2 GB 堆内存。
 
-安装 Python 依赖：
+常规 benchmark 与四范式案例安装：
 
 ```powershell
 python -m pip install -r tools\requirements-benchmark.txt
+```
+
+重新下载图片并生成 CLIP artifact 时额外安装：
+
+```powershell
+python -m pip install -r tools\requirements-data-generation.txt
+```
+
+只有运行真实外部数据库适配器时才安装：
+
+```powershell
 python -m pip install -r tools\requirements-external-db.txt
 ```
 
@@ -36,6 +49,82 @@ results/                         原始输出
 
 本次结果所用 `cangjie_input.txt` 的 SHA-256 记录在
 [`manifests/release-artifacts.json`](../manifests/release-artifacts.json)。
+仓库不托管这些约 100～140 MB 的单数据集输入，第三方需按下述命令重新生成，并使用清单哈希
+核对是否与冻结实验边界一致。
+
+## 四范式代码上下文案例
+
+该案例不需要图像数据：
+
+```powershell
+python tools\run_code_context_case_study.py
+```
+
+脚本会生成 MiniLM 向量、调用仓颉 `codecase` 入口，并将原始结果写入被 Git 忽略的
+`results/code-context-case-study/`。提交的冻结结果位于
+[`results-summary/code-context-case-study.json`](../results-summary/code-context-case-study.json)。
+
+## 下载数据
+
+以下命令下载并校验 Caltech-101、CUB-200-2011，并准备固定的 COCO-10k 清单及图片：
+
+```powershell
+python tools\download_image_datasets.py caltech cub coco
+```
+
+下载结果写入 `dataset/`，不会进入 Git。COCO 图片来自固定 URL 表，少数源站链接若暂时失效，
+脚本会记录失败项；重新执行相同命令只会重试缺失对象，不会替换样本。
+
+## 生成冻结实验输入
+
+Caltech-101：
+
+```powershell
+python tools\paper_artifact.py `
+  --dataset caltech `
+  --source-kind folder-images `
+  --source dataset/caltech-101/101_ObjectCategories `
+  --output-dir artifacts/python-paper-90-10/caltech-full `
+  --key-vector-source clip-text `
+  --model ViT-B/32 `
+  --seed 42 `
+  --test-size 0.1 `
+  --max-queries 0 `
+  --full-verified
+```
+
+CUB-200-2011：
+
+```powershell
+python tools\paper_artifact.py `
+  --dataset cub `
+  --source-kind folder-images `
+  --source dataset/CUB_200_2011/images `
+  --output-dir artifacts/python-paper-90-10/cub-full `
+  --key-vector-source clip-text `
+  --model ViT-B/32 `
+  --seed 42 `
+  --test-size 0.1 `
+  --max-queries 0 `
+  --full-verified
+```
+
+COCO-10k：
+
+```powershell
+python tools\paper_artifact.py `
+  --dataset coco `
+  --source-kind coco-json `
+  --source dataset/coco/coco_dataset_10000.json `
+  --image-root dataset/coco `
+  --output-dir artifacts/python-paper-90-10/coco-full `
+  --key-vector-source clip-text `
+  --model ViT-B/32 `
+  --seed 42 `
+  --test-size 0.1 `
+  --max-queries 0 `
+  --full-verified
+```
 
 ## 基础检查
 

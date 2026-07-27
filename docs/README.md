@@ -5,6 +5,12 @@
 [复现说明](reproducibility.md) 给出环境、输入文件和执行命令；
 [已知限制](limitations.md) 说明当前实现和实验结论的边界。
 
+阶段性材料：
+
+- [2026-07-28 科研实践工作日志](reports/科研实践工作日志-2026-07-28.md)
+- [第三阶段：Violas 四范式代码上下文案例计划](phase3-plan.md)
+- [第三阶段：Violas 四范式代码上下文案例报告](reports/code-context-case-study.md)
+
 补充资料包括：
 
 - [仓颉工程说明](guides/cangjie-core.md)

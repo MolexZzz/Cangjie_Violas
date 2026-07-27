@@ -1,0 +1,6 @@
+# Required only for downloading image datasets and regenerating CLIP artifacts.
+pandas
+Pillow
+requests
+torch
+git+https://github.com/openai/CLIP.git

@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 2,
+  "protocol": "code-context-four-paradigm-v2",
+  "model": "sentence-transformers/all-MiniLM-L6-v2",
+  "dimension": 384,
+  "projectKeys": 4,
+  "entities": 24,
+  "relations": 17,
+  "queries": 4,
+  "results": [
+    {
+      "query": "entity_route",
+      "paradigm": "EAR",
+      "method": "flat_vector",
+      "metric": "entity_purity_at_5",
+      "ranked": [
+        "search_config",
+        "search_hdmg",
+        "search_with_config",
+        "parameter_scan_result",
+        "build_hdmg"
+      ],
+      "hits": 5,
+      "total": 5,
+      "score": 1.0
+    },
+    {
+      "query": "entity_route",
+      "paradigm": "EAR",
+      "method": "violas_ear",
+      "metric": "entity_purity_at_5",
+      "ranked": [
+        "search_config",
+        "search_hdmg",
+        "search_with_config",
+        "parameter_scan_result",
+        "build_hdmg"
+      ],
+      "hits": 5,
+      "total": 5,
+      "score": 1.0
+    },
+    {
+      "query": "balanced_hdmg_context",
+      "paradigm": "DDR",
+      "method": "flat_vector",
+      "metric": "aspect_coverage_at_5",
+      "ranked": [
+        "search_config",
+        "parameter_scan_result",
+        "search_with_config",
+        "search_hdmg",
+        "config_validation_test"
+      ],
+      "hits": 3,
+      "total": 5,
+      "score": 0.6
+    },
+    {
+      "query": "balanced_hdmg_context",
+      "paradigm": "DDR",
+      "method": "violas_ddr",
+      "metric": "aspect_coverage_at_5",
+      "ranked": [
+        "search_config",
+        "search_hdmg",
+        "config_validation_test",
+        "build_hdmg",
+        "invalidate_indexes"
+      ],
+      "hits": 5,
+      "total": 5,
+      "score": 1.0
+    },
+    {
+      "query": "index_dependency_chain",
+      "paradigm": "RER",
+      "method": "flat_vector",
+      "metric": "dependency_coverage_at_5",
+      "ranked": [
+        "lifecycle_test",
+        "config_validation_test",
+        "parameter_scan_result",
+        "search_hdmg",
+        "search_with_config"
+      ],
+      "hits": 2,
+      "total": 5,
+      "score": 0.4
+    },
+    {
+      "query": "index_dependency_chain",
+      "paradigm": "RER",
+      "method": "violas_rer",
+      "metric": "dependency_coverage_at_5",
+      "ranked": [
+        "invalidate_indexes",
+        "update_object",
+        "search_hdmg",
+        "lifecycle_test",
+        "build_hdmg"
+      ],
+      "hits": 5,
+      "total": 5,
+      "score": 1.0
+    },
+    {
+      "query": "code_to_evaluation",
+      "paradigm": "CMP",
+      "method": "flat_neighbor",
+      "metric": "pair_hit_at_1",
+      "ranked": [
+        "search_hdmg"
+      ],
+      "hits": 0,
+      "total": 1,
+      "score": 0.0
+    },
+    {
+      "query": "code_to_evaluation",
+      "paradigm": "CMP",
+      "method": "violas_cmp",
+      "metric": "pair_hit_at_1",
+      "ranked": [
+        "parameter_scan_result"
+      ],
+      "hits": 1,
+      "total": 1,
+      "score": 1.0
+    }
+  ],
+  "paradigmSummary": {
+    "EAR": {
+      "flat_vector": 1.0,
+      "violas_ear": 1.0
+    },
+    "DDR": {
+      "flat_vector": 0.6,
+      "violas_ddr": 1.0
+    },
+    "RER": {
+      "flat_vector": 0.4,
+      "violas_rer": 1.0
+    },
+    "CMP": {
+      "flat_neighbor": 0.0,
+      "violas_cmp": 1.0
+    }
+  }
+}

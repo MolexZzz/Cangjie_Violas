@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import subprocess
@@ -17,21 +18,16 @@ import sklearn
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PYTHON_REFERENCE_ROOT = ROOT / "violas_python"
-sys.path.insert(0, str(PYTHON_REFERENCE_ROOT))
-
-from violas.storage.vectorgroup import VectorGroup  # noqa: E402
-from violas.storage.vectormap import VectorMap  # noqa: E402
 
 
-def make_fixture() -> VectorGroup:
+def make_fixture(vector_group_class):
     vectors = []
     descriptions = []
     for index in range(16):
         x = -10.0 + index * 0.001 if index % 2 == 0 else 10.0 + index * 0.001
         vectors.append(np.array([x, 0.0], dtype=np.float64))
         descriptions.append({"text": f"item-{index}"})
-    return VectorGroup(
+    return vector_group_class(
         group_name="alternating",
         representative=np.array([0.0, 0.0], dtype=np.float64),
         rep_description="fixture representative",
@@ -52,9 +48,11 @@ def result_members(results) -> str:
     return ",".join(members)
 
 
-def python_trace() -> dict[str, str]:
-    vector_map = VectorMap()
-    created = vector_map.insert_with_auto_cluster("topic", make_fixture(), alpha=0.75)
+def python_trace(vector_group_class, vector_map_class) -> dict[str, str]:
+    vector_map = vector_map_class()
+    created = vector_map.insert_with_auto_cluster(
+        "topic", make_fixture(vector_group_class), alpha=0.75
+    )
     if created != 2:
         raise AssertionError(f"Python reference created {created} clusters, expected 2")
 
@@ -93,13 +91,44 @@ def cangjie_trace() -> tuple[dict[str, str], str]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--python-reference-root",
+        type=Path,
+        help=(
+            "external Violas Python checkout containing violas/storage; "
+            "the reference implementation is not bundled in this repository"
+        ),
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=ROOT / "tests" / "fixtures" / "python-cangjie-parity.json",
     )
     args = parser.parse_args()
 
-    expected = python_trace()
+    reference_root = args.python_reference_root
+    if reference_root is None:
+        local_candidate = ROOT / "violas_python"
+        if local_candidate.is_dir():
+            reference_root = local_candidate
+        else:
+            parser.error(
+                "--python-reference-root is required because the Violas Python "
+                "reference is not included in this repository"
+            )
+    reference_root = reference_root.resolve()
+    if not (reference_root / "violas" / "storage").is_dir():
+        parser.error(
+            f"invalid Python reference root (missing violas/storage): {reference_root}"
+        )
+    sys.path.insert(0, str(reference_root))
+    vector_group_class = importlib.import_module(
+        "violas.storage.vectorgroup"
+    ).VectorGroup
+    vector_map_class = importlib.import_module(
+        "violas.storage.vectormap"
+    ).VectorMap
+
+    expected = python_trace(vector_group_class, vector_map_class)
     actual, stdout = cangjie_trace()
     keys = sorted(set(expected) | set(actual))
     comparisons = {
@@ -108,7 +137,7 @@ def main() -> None:
     }
     payload = {
         "schemaVersion": 1,
-        "pythonReference": "violas_python (read-only)",
+        "pythonReference": str(reference_root),
         "pythonVersion": sys.version.split()[0],
         "numpyVersion": np.__version__,
         "sklearnVersion": sklearn.__version__,

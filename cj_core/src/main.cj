@@ -15,6 +15,7 @@ main() {
     println("  paper <cangjie_input.txt> <maxQueries> <beta|all> = 冻结 90/10 artifact 评测")
     println("  paper-config <input> <maxQueries> <beta> <embeddingK> <semanticIntraK> <bridgeKeys> <bridgePerKey> <poolMultiplier> <topKeys> [summary.log]")
     println("  maintenance <cangjie_input.txt> <count> [summary.log] = 对象与 HDMG 维护评测")
+    println("  codecase <case-study.tsv> = Violas 四范式代码上下文检索案例")
     print("请选择: ")
     let choice = readln()
     if (choice == "0") {
@@ -80,6 +81,12 @@ main() {
             parts[1], Int64.parse(parts[2]),
             summaryPath: if (parts.size == 4) { parts[3] } else { "" }
         )
+    } else if (choice.startsWith("codecase ")) {
+        let parts = choice.split(" ")
+        if (parts.size != 2) {
+            throw IllegalArgumentException("用法: codecase <case-study.tsv>")
+        }
+        runCodeContextCaseStudy(parts[1])
     } else {
         interactiveBenchMain()
     }

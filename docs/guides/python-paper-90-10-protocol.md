@@ -22,7 +22,7 @@ Qdrant 与 Chroma 在相同输入上运行。数据按类别划分，测试集�
 
 ## 生成输入
 
-Caltech-101 和 CUB-200-2011 使用按类别组织的图片目录：
+Caltech-101 使用按类别组织的图片目录：
 
 ```powershell
 python tools\paper_artifact.py `
@@ -30,6 +30,22 @@ python tools\paper_artifact.py `
   --source-kind folder-images `
   --source dataset/caltech-101/101_ObjectCategories `
   --output-dir artifacts/python-paper-90-10/caltech-full `
+  --key-vector-source clip-text `
+  --model ViT-B/32 `
+  --seed 42 `
+  --test-size 0.1 `
+  --max-queries 0 `
+  --full-verified
+```
+
+CUB-200-2011：
+
+```powershell
+python tools\paper_artifact.py `
+  --dataset cub `
+  --source-kind folder-images `
+  --source dataset/CUB_200_2011/images `
+  --output-dir artifacts/python-paper-90-10/cub-full `
   --key-vector-source clip-text `
   --model ViT-B/32 `
   --seed 42 `
@@ -48,6 +64,9 @@ python tools\paper_artifact.py `
   --image-root dataset/coco `
   --output-dir artifacts/python-paper-90-10/coco-full `
   --key-vector-source clip-text `
+  --model ViT-B/32 `
+  --seed 42 `
+  --test-size 0.1 `
   --max-queries 0 `
   --full-verified
 ```

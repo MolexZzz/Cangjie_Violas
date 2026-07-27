@@ -4,6 +4,14 @@
 向量距离的近邻检索。仓颉核心包括 `VectorMap`、微簇组织、HDMG 图索引和 Mixed Search；
 Python 工具负责数据预处理、基准测试与结果校验。
 
+## 实践目标与完成情况
+
+| 阶段 | 交付 |
+| --- | --- |
+| （1）代码 review、架构整理和 Faiss 对比 | 拆分存储、聚类、HDMG 与 mixed score 模块；补充测试、代码量统计及 Faiss 对比 |
+| （2）全量数据实验和参数调优 | 完成 Caltech-101、CUB-200-2011、COCO 完整查询池实验和 HDMG 参数扫描 |
+| （3）Violas 支撑 CodeAgent | 实现 EAR、DDR、RER、CMP 四范式代码项目上下文案例 |
+
 项目目前在 Caltech-101、CUB-200-2011 和 COCO 三个图像数据集上完成了 90% 建库、
 10% 查询的实验。图像和类别文本均使用 CLIP ViT-B/32 编码。β=0.5 时的结果如下：
 
@@ -16,9 +24,16 @@ Python 工具负责数据预处理、基准测试与结果校验。
 完整结果及其适用范围见 [实验结果](results-summary/README.md)。这些数据只反映本仓库所采用的
 三数据集实验协议，不等同于原论文的六数据集结果。
 
-## 构建与测试
+阶段（3）将仓颉源码、测试、文档、脚本和结果组织为 4 个项目实体、24 个成员和 17 条关系。
+在小型案例中，EAR 的实体纯度与扁平向量检索持平，DDR、RER 和 CMP 分别补充了实现侧面、
+依赖链和源码—文档配对。结果及限制见
+[四范式代码上下文案例](docs/reports/code-context-case-study.md)。
 
-仓颉工具链版本为 `1.0.4`。
+## 快速验证
+
+### 1. 仓颉核心
+
+仓颉工具链版本为 `1.0.4`。该步骤不需要数据集或 Python 环境。
 
 ```powershell
 cd cj_core
@@ -34,10 +49,23 @@ cd cj_core
 "0" | cjpm run
 ```
 
-## 实验复现
+### 2. 四范式代码上下文案例
+
+该步骤需要 Python 和 MiniLM 模型；模型首次运行时由 `sentence-transformers` 下载并缓存。
+
+```powershell
+python -m pip install -r tools\requirements-benchmark.txt
+python tools\run_code_context_case_study.py
+```
+
+冻结的机器可读结果位于
+[`results-summary/code-context-case-study.json`](results-summary/code-context-case-study.json)。
+
+### 3. 全量图像实验
 
 原始数据、模型和中间向量文件体积较大，不随仓库发布。数据准备和文件校验方法见
-[复现说明](docs/reproducibility.md)。完整查询池实验的调用方式为：
+[复现说明](docs/reproducibility.md)；建议使用 Python 3.11 复现原实验环境。完整查询池实验的
+调用方式为：
 
 ```powershell
 .\tools\run_image_full_suite.ps1 `
@@ -72,6 +100,7 @@ docs/             设计与复现文档
 - [实验设置](docs/experiments.md)
 - [复现说明](docs/reproducibility.md)
 - [已知限制](docs/limitations.md)
+- [四范式代码上下文案例](docs/reports/code-context-case-study.md)
 - [工具索引](tools/README.md)
 - [贡献指南](CONTRIBUTING.md)
 
