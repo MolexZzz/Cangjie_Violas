@@ -107,5 +107,5 @@ docs/             设计与复现文档
 ## 许可
 
 本项目自行编写的仓颉实现以 [MIT License](LICENSE) 发布。项目设计和一致性测试参考了采用
-Apache License 2.0 的 [DoubleNorth/Violas](https://github.com/DoubleNorth/Violas)；
+Apache License 2.0 的 [AgentCombo/Violas](https://github.com/AgentCombo/Violas)；
 来源及第三方许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
